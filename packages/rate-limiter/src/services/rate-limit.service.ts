@@ -1,10 +1,13 @@
-import { REDIS_KEY_PREFIX , AlgorithmType } from '@rateforge/types';
+import { REDIS_KEY_PREFIX, AlgorithmType } from '@rateforge/types';
 
-
-import { TokenBucket } from '../algorithms/token-bucket';
+import { getAlgorithm } from '../algorithms/factory';
 import { createRedisClient } from '../redis/client';
 
+import type { RateLimiterAlgorithm } from '../algorithms/interface';
 import type { RateLimitRequest, RateLimitResult, RuleConfig } from '@rateforge/types';
+
+// AlgorithmType is used by the factory for leaky_bucket warn log — keep import.
+void AlgorithmType;
 
 /**
  * Minimal in-memory rule store used until the full dynamic-rules loader
@@ -102,18 +105,27 @@ export async function resetLimit(clientId: string): Promise<number> {
 function matchRule(req: RateLimitRequest): RuleConfig | undefined {
   const enabled = activeRules.filter((r) => r.enabled);
 
+  // Sort by endpointPattern length descending so specific routes ('/api/v1/a')
+  // are evaluated before wildcards ('*') or shorter prefixes ('/api').
+  const sorted = [...enabled].sort((a, b) => {
+    if (a.endpointPattern === '*') return 1;
+    if (b.endpointPattern === '*') return -1;
+    return b.endpointPattern.length - a.endpointPattern.length;
+  });
+
   // Prefer rules that match the client's tier
-  const tierMatch = enabled.find(
+  const tierMatch = sorted.find(
     (r) =>
       r.clientTier === req.identity.tier &&
       (r.endpointPattern === '*' || req.endpoint.startsWith(r.endpointPattern))
   );
   if (tierMatch) return tierMatch;
 
-  // Fall back to the first rule that matches the endpoint
-  return enabled.find(
+  // Fall back to the first matching rule that does not require a specific tier
+  return sorted.find(
     (r) =>
-      r.endpointPattern === '*' || req.endpoint.startsWith(r.endpointPattern)
+      !r.clientTier &&
+      (r.endpointPattern === '*' || req.endpoint.startsWith(r.endpointPattern))
   );
 }
 
@@ -131,20 +143,15 @@ function buildKey(req: RateLimitRequest, ruleId: string): string {
 }
 
 /**
- * In-memory algorithm instances keyed by ruleId.
- * Replaced by the AlgorithmFactory (P1-M5-T1) once all algorithm Redis
- * backends are in place.
+ * In-memory algorithm instances keyed by ruleId, backed by AlgorithmFactory.
  */
-const algorithmCache = new Map<string, TokenBucket>();
+const algorithmCache = new Map<string, RateLimiterAlgorithm>();
 
-function getAlgorithm(rule: RuleConfig): TokenBucket {
+function getOrCreateAlgorithm(rule: RuleConfig): RateLimiterAlgorithm {
   const cached = algorithmCache.get(rule.id);
   if (cached) return cached;
 
-  const instance = new TokenBucket({
-    capacity: rule.maxRequests,
-    windowMs: rule.windowMs
-  });
+  const instance = getAlgorithm(rule);
   algorithmCache.set(rule.id, instance);
   return instance;
 }
@@ -180,11 +187,10 @@ export async function checkLimit(
   }
 
   const key = buildKey(req, rule.id);
-  const algorithm = getAlgorithm(rule);
+  const algorithm = getOrCreateAlgorithm(rule);
 
-  // `consume` is synchronous (in-memory); once Redis backends are wired this
-  // will become async through the AlgorithmFactory interface.
-  const result = algorithm.consume(key, 1);
+  // Unified interface: check() is synchronous for in-memory algorithms.
+  const result = algorithm.check(key, 1);
 
   return {
     ...result,

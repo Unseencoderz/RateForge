@@ -15,7 +15,8 @@ import { PORT } from '@rateforge/config';
 import { HTTP_STATUS_OK, HTTP_STATUS_INTERNAL_SERVER_ERROR } from '@rateforge/types';
 
 import { checkLimit, setRules, getRules, resetLimit } from './services/rate-limit.service';
-import { healthCheck } from './redis/client';
+import { createRedisClient, healthCheck } from './redis/client';
+import { registerShutdown } from './utils/shutdown';
 
 import type { Request, Response } from 'express';
 import type { ApiResponse, RateLimitRequest } from '@rateforge/types';
@@ -79,9 +80,11 @@ healthCheck().then((ok) => {
   }
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.info(`[rate-limiter] Service listening on port ${port}`);
 });
+
+registerShutdown(createRedisClient(), server);
 
 // Exports for tests
 export { app, setRules };

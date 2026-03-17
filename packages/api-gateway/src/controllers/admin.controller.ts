@@ -6,10 +6,9 @@ import {
   HTTP_STATUS_OK,
   HTTP_STATUS_CREATED,
   HTTP_STATUS_BAD_REQUEST,
-  HTTP_STATUS_NOT_FOUND,
   HTTP_STATUS_INTERNAL_SERVER_ERROR
 } from '@rateforge/types';
-import { Router } from 'express';
+import express, { Router } from 'express';
 import IORedis from 'ioredis';
 import { z } from 'zod';
 
@@ -287,12 +286,7 @@ export async function postAdminResetClient(
 export const adminRouter: Router = Router();
 
 // Parse JSON bodies for all admin routes
-adminRouter.use(express_json_middleware());
-
-function express_json_middleware() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  return require('express').json();
-}
+adminRouter.use(express.json());
 
 /** GET /api/v1/admin/rules — returns the currently active rule set */
 adminRouter.get('/rules', (req, res, next) => { getAdminRules(req, res).catch(next); });
@@ -308,6 +302,3 @@ adminRouter.post('/rules', postAdminRules);
  * Resets the rate-limit counters for the given client in Redis.
  */
 adminRouter.post('/reset/:clientId', postAdminResetClient);
-
-// Suppress unused import lint warning from HTTP_STATUS_NOT_FOUND
-void HTTP_STATUS_NOT_FOUND;

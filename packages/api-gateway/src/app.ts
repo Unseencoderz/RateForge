@@ -8,7 +8,6 @@ import { HTTP_STATUS_OK, HTTP_STATUS_INTERNAL_SERVER_ERROR } from '@rateforge/ty
 import { adminRouter } from './controllers/admin.controller';
 import { loadRules } from './config/rules-loader';
 import { startRulesWatcher } from './config/rules-watcher';
-import { setRules, getRules } from './services/rate-limiter.client';
 import { healthCheck } from './services/health-check';
 
 import type { Express, Request, Response, NextFunction } from 'express';
@@ -77,21 +76,26 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 // ── Startup sequence ──────────────────────────────────────────────────────────
 
 /**
- * Loads rules from disk, calls setRules() on RateLimitService, and
- * starts the Redis Pub/Sub hot-reload watcher.
+ * Loads rules from disk, validates them, and starts the Redis Pub/Sub
+ * hot-reload watcher.
  *
  * Called from server.ts after the HTTP server is listening.
+ *
+ * Rules are loaded from disk and applied to the rate-limiter service's in-memory store
+ * via the hot-reload watcher (startRulesWatcher). The api-gateway process itself does
+ * not maintain a rule store — it delegates all rate-limit decisions to the rate-limiter
+ * service over HTTP.
  */
 export async function initApp(): Promise<void> {
-  // Load and apply rules on startup
-  const initialRules = loadRules();
-  setRules(initialRules);
-  console.info(`[app] Loaded ${initialRules.length} rule(s) from rules.json`);
+  // Validate rules.json on startup so a misconfigured file is caught immediately.
+  // The watcher will apply the rules to the rate-limiter when it fires.
+  loadRules();  // throws on invalid config → process.exit(1) via server.ts catch
+
+  console.info('[app] rules.json validated — starting hot-reload watcher');
 
   // Start hot-reload watcher for runtime rule updates
   startRulesWatcher({
     onReloaded: (rules) => {
-      setRules(rules);
       console.info(`[app] Hot-reloaded ${rules.length} rule(s)`);
     },
     onError: (err) => {

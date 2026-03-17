@@ -2,6 +2,10 @@ import { DEFAULT_WINDOW_MS, MAX_BURST } from '@rateforge/types';
 
 import type { RateLimitResult } from '@rateforge/types';
 
+// MAX_BURST is exported from @rateforge/types for future Redis Lua scripts.
+// It is intentionally not used here — burst headroom is controlled via burstCapacity.
+void MAX_BURST;
+
 interface BucketState {
   tokens: number;
   lastRefill: number;
@@ -18,6 +22,11 @@ interface TokenBucketOptions {
    */
   windowMs?: number;
   /**
+   * Optional burst ceiling. Tokens refill up to this value, not just capacity.
+   * Defaults to capacity (no burst headroom).
+   */
+  burstCapacity?: number;
+  /**
    * Optional function to override current time (useful for tests).
    */
   now?: () => number;
@@ -26,13 +35,15 @@ interface TokenBucketOptions {
 export class TokenBucket {
   private readonly capacity: number;
   private readonly windowMs: number;
+  private readonly burstCapacity: number;
   private readonly now: () => number;
   private readonly buckets = new Map<string, BucketState>();
 
   constructor(options: TokenBucketOptions) {
-    this.capacity = options.capacity;
-    this.windowMs = options.windowMs ?? DEFAULT_WINDOW_MS;
-    this.now = options.now ?? (() => Date.now());
+    this.capacity      = options.capacity;
+    this.windowMs      = options.windowMs      ?? DEFAULT_WINDOW_MS;
+    this.burstCapacity = options.burstCapacity ?? options.capacity; // ceiling = capacity when not specified
+    this.now           = options.now           ?? (() => Date.now());
   }
 
   private getBucket(key: string): BucketState {
@@ -41,7 +52,7 @@ export class TokenBucket {
 
     if (!existing) {
       const initial: BucketState = {
-        tokens: this.capacity + MAX_BURST,
+        tokens:     this.capacity,   // FIX: start full at capacity, not capacity + MAX_BURST
         lastRefill: now
       };
       this.buckets.set(key, initial);
@@ -53,10 +64,10 @@ export class TokenBucket {
       return existing;
     }
 
-    const refillRatePerMs = this.capacity / this.windowMs;
-    const refilled = existing.tokens + elapsed * refillRatePerMs;
-    existing.tokens = Math.min(refilled, this.capacity + MAX_BURST);
-    existing.lastRefill = now;
+    const refillRatePerMs  = this.capacity / this.windowMs;
+    const refilled         = existing.tokens + elapsed * refillRatePerMs;
+    existing.tokens        = Math.min(refilled, this.burstCapacity); // FIX: ceiling is burstCapacity
+    existing.lastRefill    = now;
 
     return existing;
   }
@@ -90,5 +101,9 @@ export class TokenBucket {
       reason: 'TOKEN_BUCKET_EXHAUSTED'
     };
   }
-}
 
+  /** Satisfies the RateLimiterAlgorithm interface — delegates to consume(). */
+  check(key: string, cost = 1): RateLimitResult {
+    return this.consume(key, cost);
+  }
+}
