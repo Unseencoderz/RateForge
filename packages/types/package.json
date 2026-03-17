@@ -1,0 +1,13 @@
+{
+  "name": "@rateforge/types",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "jest --config ../../jest.config.base.js --passWithNoTests",
+    "lint": "eslint src --ext .ts --max-warnings=0",
+    "typecheck": "tsc --noEmit"
+  }
+}

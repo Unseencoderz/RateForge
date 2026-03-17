@@ -1,0 +1,16 @@
+{
+  "name": "@rateforge/config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/env.js",
+  "types": "dist/env.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "jest --config ../../jest.config.base.js --passWithNoTests",
+    "lint": "eslint src --ext .ts --max-warnings=0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  }
+}

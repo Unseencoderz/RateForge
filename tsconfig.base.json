@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@rateforge/types": [
+        "packages/types/src/index.ts"
+      ],
+      "@rateforge/types/*": [
+        "packages/types/src/*"
+      ],
+      "@rateforge/config": [
+        "packages/config/src/env.ts"
+      ],
+      "@rateforge/config/*": [
+        "packages/config/src/*"
+      ],
+      "@rateforge/api-gateway/*": [
+        "packages/api-gateway/src/*"
+      ],
+      "@rateforge/rate-limiter/*": [
+        "packages/rate-limiter/src/*"
+      ],
+      "@rateforge/dashboard/*": [
+        "packages/dashboard/src/*"
+      ]
+    }
+  }
+}

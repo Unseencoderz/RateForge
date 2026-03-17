@@ -1,0 +1,8 @@
+# Local environment files (do not commit real secrets)
+.env
+
+# Dependencies and build artifacts
+node_modules
+dist
+coverage
+

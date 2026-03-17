@@ -1,0 +1,68 @@
+import { JWT_SECRET } from '@rateforge/config';
+import jwt from 'jsonwebtoken';
+
+import type { ClientIdentity } from '@rateforge/types';
+import type { Request, Response, NextFunction } from 'express';
+
+/** Extend Express Request to carry the decoded client identity. */
+declare global {
+  namespace Express {
+    interface Request {
+      clientIdentity?: ClientIdentity;
+    }
+  }
+}
+
+/**
+ * P2-M2-T1 · JWT auth middleware.
+ *
+ * Reads the `Authorization: Bearer <token>` header, verifies the JWT using
+ * JWT_SECRET, and attaches `req.clientIdentity` for downstream middleware.
+ *
+ * Returns 401 when:
+ * - The header is absent or not in `Bearer <token>` form
+ * - The token is expired, revoked, or otherwise invalid
+ */
+export async function verifyToken(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const authHeader = req.headers['authorization'];
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Missing or malformed Authorization header.'
+      }
+    });
+    return;
+  }
+
+  const token = authHeader.slice(7); // strip "Bearer "
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as {
+      userId: string;
+      tier?: string;
+    };
+
+    req.clientIdentity = {
+      userId: payload.userId,
+      ip: req.ip ?? req.socket.remoteAddress ?? '0.0.0.0',
+      tier: payload.tier ?? 'free'
+    };
+
+    next();
+  } catch {
+    res.status(401).json({
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Invalid or expired token.'
+      }
+    });
+  }
+}
