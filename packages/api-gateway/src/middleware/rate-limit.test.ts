@@ -10,7 +10,9 @@ import type { RateLimitResult } from '@rateforge/types';
 const checkLimitMock = jest.fn<() => Promise<RateLimitResult>>();
 
 jest.mock('../services/rate-limiter.client', () => ({
-  checkLimit: (...args: any[]) => (checkLimitMock as any)(...args)
+  checkLimit:    (...args: any[]) => (checkLimitMock as any)(...args),
+  isBlacklisted: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
+  isWhitelisted: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
