@@ -1,13 +1,10 @@
-import { REDIS_KEY_PREFIX, AlgorithmType } from '@rateforge/types';
+import { AlgorithmType , REDIS_KEY_PREFIX } from '@rateforge/types';
 
 import { getAlgorithm } from '../algorithms/factory';
 import { createRedisClient } from '../redis/client';
 
 import type { RateLimiterAlgorithm } from '../algorithms/interface';
 import type { RateLimitRequest, RateLimitResult, RuleConfig } from '@rateforge/types';
-
-// AlgorithmType is used by the factory for leaky_bucket warn log — keep import.
-void AlgorithmType;
 
 /**
  * Minimal in-memory rule store used until the full dynamic-rules loader

@@ -1,10 +1,6 @@
-import { DEFAULT_WINDOW_MS, MAX_BURST } from '@rateforge/types';
+import { DEFAULT_WINDOW_MS } from '@rateforge/types';
 
 import type { RateLimitResult } from '@rateforge/types';
-
-// MAX_BURST is exported from @rateforge/types for future Redis Lua scripts.
-// It is intentionally not used here — burst headroom is controlled via burstCapacity.
-void MAX_BURST;
 
 interface BucketState {
   tokens: number;

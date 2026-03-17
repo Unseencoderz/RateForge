@@ -14,10 +14,11 @@ import { z } from 'zod';
 
 import { getRulesPath } from '../config/rules-loader';
 import { RULES_UPDATE_CHANNEL } from '../config/rules-watcher';
+import { verifyToken } from '../middleware/auth';
 import { getRules, resetLimit } from '../services/rate-limiter.client';
 
-import type { Request, Response } from 'express';
 import type { ApiResponse, RuleConfig, AdminRulePayload, ResetClientResponse } from '@rateforge/types';
+import type { Request, Response } from 'express';
 
 // ── Publisher connection ──────────────────────────────────────────────────────
 //
@@ -287,6 +288,9 @@ export const adminRouter: Router = Router();
 
 // Parse JSON bodies for all admin routes
 adminRouter.use(express.json());
+
+// Protect all admin routes with JWT auth
+adminRouter.use(verifyToken);
 
 /** GET /api/v1/admin/rules — returns the currently active rule set */
 adminRouter.get('/rules', (req, res, next) => { getAdminRules(req, res).catch(next); });

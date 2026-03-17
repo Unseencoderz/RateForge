@@ -1,7 +1,8 @@
 import { DEFAULT_WINDOW_MS } from '@rateforge/types';
-import type { RateLimitResult } from '@rateforge/types';
 
 import type { RateLimiterAlgorithm } from './interface';
+import type { RateLimitResult } from '@rateforge/types';
+
 
 interface WindowState {
   count:       number;

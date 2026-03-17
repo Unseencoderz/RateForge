@@ -42,7 +42,7 @@ const VALID_RULE: RuleConfig = {
 const VALID_RULES_JSON = JSON.stringify([VALID_RULE]);
 
 function mockFile(content: string): void {
-  readFileSyncMock.mockReturnValueOnce(content as unknown as Buffer);
+  readFileSyncMock.mockReturnValueOnce(content as any);
 }
 
 function mockFileError(message: string): void {

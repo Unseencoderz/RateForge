@@ -76,6 +76,18 @@ export function sendRateLimitResponse(
   }
 
   // ── 3. Blocked: set Retry-After and send 429 ─────────────────────────────
+  // Blacklisted requests should be forbidden (403), not rate-limited (429).
+  if (result.reason === 'BLACKLISTED') {
+    res.status(403).json({
+      success: false,
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Your IP address has been blocked.',
+      }
+    });
+    return;
+  }
+
   //
   // RFC 7231 §7.1.3: Retry-After value is a delay in seconds (integer).
   const retryAfterSeconds = result.retryAfterMs !== undefined

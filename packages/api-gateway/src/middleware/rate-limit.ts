@@ -1,7 +1,11 @@
 
 import { AlgorithmType } from '@rateforge/types';
 
-import { checkLimit } from '../services/rate-limiter.client';
+import {
+  checkLimit,
+  isBlacklisted,
+  isWhitelisted
+} from '../services/rate-limiter.client';
 
 import type { RateLimitRequest, RateLimitResult } from '@rateforge/types';
 import type { Request, Response, NextFunction } from 'express';
@@ -67,7 +71,39 @@ export async function applyRateLimit(
     algorithm: AlgorithmType.TOKEN_BUCKET
   };
 
+  
   try {
+    // Blacklist check — immediate 403, before rate-limit algorithm
+    const clientIp = identity.ip;
+    const [blacklisted, whitelisted] = await Promise.all([
+      isBlacklisted(clientIp),
+      isWhitelisted(clientIp),
+    ]);
+
+    if (blacklisted) {
+      req.rateLimitResult = {
+        allowed:   false,
+        limit:     0,
+        remaining: 0,
+        resetAt:   rlRequest.timestamp + 60_000,
+        reason:    'BLACKLISTED',
+      };
+      next();
+      return;
+    }
+
+    if (whitelisted) {
+      req.rateLimitResult = {
+        allowed:   true,
+        limit:     Infinity,
+        remaining: Infinity,
+        resetAt:   rlRequest.timestamp + 60_000,
+        reason:    'WHITELISTED',
+      };
+      next();
+      return;
+    }
+
     const result = await checkLimit(rlRequest);
     req.rateLimitResult = result;
   } catch (err) {

@@ -1,17 +1,16 @@
+import { HTTP_STATUS_OK } from '@rateforge/types';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { v4 as uuidv4 } from 'uuid';
 
-import { HTTP_STATUS_OK, HTTP_STATUS_INTERNAL_SERVER_ERROR } from '@rateforge/types';
-
-import { adminRouter } from './controllers/admin.controller';
 import { loadRules } from './config/rules-loader';
 import { startRulesWatcher } from './config/rules-watcher';
+import { adminRouter } from './controllers/admin.controller';
+import { errorHandler } from './middleware/error-handler';
+import { attachRequestId } from './middleware/request-id';
 import { healthCheck } from './services/health-check';
 
 import type { Express, Request, Response, NextFunction } from 'express';
-import type { ApiResponse } from '@rateforge/types';
 
 export const app: Express = express();
 
@@ -24,12 +23,7 @@ app.use(express.json());
 //
 // Attaches a UUID v4 to `req.id` and sets `X-Request-ID` response header on
 // every request. Downstream middleware and logs use this as the correlation ID.
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const requestId = uuidv4();
-  (req as Request & { id: string }).id = requestId;
-  res.setHeader('X-Request-ID', requestId);
-  next();
-});
+app.use(attachRequestId);
 
 // ── Health / readiness endpoints (P2-M1-T4) ───────────────────────────────────
 //
@@ -58,20 +52,7 @@ apiRouter.use('/admin', adminRouter);
 // ── Centralised error handler (P2-M1-T2) ─────────────────────────────────────
 //
 // ⚠️  Must be the LAST middleware registered.
-// Catches any error passed via next(err) and maps it to ApiResponse shape.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  const message = err instanceof Error ? err.message : 'Internal server error';
-  console.error('[error-handler]', err);
-  const body: ApiResponse<never> = {
-    success: false,
-    error: {
-      code: 'INTERNAL_ERROR',
-      message
-    }
-  };
-  res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json(body);
-});
+app.use(errorHandler);
 
 // ── Startup sequence ──────────────────────────────────────────────────────────
 
