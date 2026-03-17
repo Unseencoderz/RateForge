@@ -82,4 +82,13 @@ describe('Redis healthCheck', () => {
     expect(result).toBe(false);
     expect(mockInstance.ping).toHaveBeenCalledTimes(1);
   });
+
+  afterAll(async () => {
+    const anyInstance = mockInstance as unknown as { disconnect?: () => unknown; quit?: () => unknown };
+    if (typeof anyInstance.disconnect === 'function') {
+      await anyInstance.disconnect();
+    } else if (typeof anyInstance.quit === 'function') {
+      await anyInstance.quit();
+    }
+  });
 });

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "tsc -b",
-    "test": "jest --passWithNoTests",
+    "test": "jest --config ../../jest.config.base.js --passWithNoTests",
     "lint": "eslint src --ext .ts --max-warnings=0",
     "typecheck": "tsc --noEmit"
   },
