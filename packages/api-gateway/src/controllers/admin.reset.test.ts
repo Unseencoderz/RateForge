@@ -35,6 +35,11 @@ jest.mock('fs', () => ({
   renameSync:    jest.fn()
 }));
 
+jest.mock('../middleware/auth', () => ({
+  verifyToken: (_req: any, _res: any, next: any) => next(),
+  requireAdmin: (_req: any, _res: any, next: any) => next(),
+}));
+
 // ── Import AFTER mocks ────────────────────────────────────────────────────────
 
 import { postAdminResetClient, adminRouter } from './admin.controller';

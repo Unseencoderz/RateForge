@@ -65,7 +65,7 @@ export class SlidingWindowLog implements RateLimiterAlgorithm {
   }
 
   /** Satisfies RateLimiterAlgorithm. Cost is always 1 for sliding window. */
-  check(key: string, _cost = 1): RateLimitResult {
+  check(key: string, _cost?: number): RateLimitResult {
     return this._check(key);
   }
 }

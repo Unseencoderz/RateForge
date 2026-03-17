@@ -10,7 +10,7 @@ import { errorHandler } from './middleware/error-handler';
 import { attachRequestId } from './middleware/request-id';
 import { healthCheck } from './services/health-check';
 
-import type { Express, Request, Response, NextFunction } from 'express';
+import type { Express, Request, Response } from 'express';
 
 export const app: Express = express();
 

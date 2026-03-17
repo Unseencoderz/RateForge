@@ -23,6 +23,11 @@ jest.mock('../config/rules-loader', () => ({ getRulesPath: () => '/fake/rules.js
 jest.mock('../config/rules-watcher', () => ({ RULES_UPDATE_CHANNEL: 'rateforge:rules:update' }));
 jest.mock('fs', () => ({ writeFileSync: jest.fn(), renameSync: jest.fn() }));
 
+jest.mock('../middleware/auth', () => ({
+  verifyToken: (_req: any, _res: any, next: any) => next(),
+  requireAdmin: (_req: any, _res: any, next: any) => next(),
+}));
+
 import { adminRouter } from './admin.controller';
 
 function buildApp() {

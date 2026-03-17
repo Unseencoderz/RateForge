@@ -34,6 +34,11 @@ jest.mock('@rateforge/config', () => ({
   LOG_LEVEL: 'info'
 }));
 
+jest.mock('../middleware/auth', () => ({
+  verifyToken: (_req: any, _res: any, next: any) => next(),
+  requireAdmin: (_req: any, _res: any, next: any) => next(),
+}));
+
 // ── Import AFTER mocks ────────────────────────────────────────────────────────
 
 import { getAdminRules, adminRouter } from './admin.controller';

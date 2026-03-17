@@ -4,8 +4,9 @@ import jwt from 'jsonwebtoken';
 import type { ClientIdentity } from '@rateforge/types';
 import type { Request, Response, NextFunction } from 'express';
 
-/** Extend Express Request to carry the decoded client identity. */
+// eslint-disable-next-line @typescript-eslint/no-namespace
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       clientIdentity?: ClientIdentity;

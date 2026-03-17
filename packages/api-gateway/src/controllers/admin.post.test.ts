@@ -16,8 +16,6 @@ import { AlgorithmType } from '@rateforge/types';
 import express from 'express';
 import request from 'supertest';
 
-import { postAdminRules, adminRouter } from './admin.controller';
-
 import type { RuleConfig } from '@rateforge/types';
 
 // ── Prevent process.exit killing Jest ────────────────────────────────────────
@@ -68,8 +66,14 @@ jest.mock('../services/rate-limiter.client', () => ({
   getRules: jest.fn().mockReturnValue([])
 }));
 
+jest.mock('../middleware/auth', () => ({
+  verifyToken: (_req: any, _res: any, next: any) => next(),
+  requireAdmin: (_req: any, _res: any, next: any) => next(),
+}));
+
 // ── Import AFTER mocks ────────────────────────────────────────────────────────
 
+import { postAdminRules, adminRouter } from './admin.controller';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

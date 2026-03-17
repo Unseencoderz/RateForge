@@ -15,6 +15,7 @@ import type { Request, Response, NextFunction } from 'express';
  * can read the rate-limit result without re-running the check.
  */
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       /**

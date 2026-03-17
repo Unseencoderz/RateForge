@@ -8,9 +8,9 @@ import {
   HTTP_STATUS_INTERNAL_SERVER_ERROR,
   HTTP_STATUS_BAD_REQUEST,
 } from '@rateforge/types';
-import { z } from 'zod';
 import express, { type Express, type Request, type Response } from 'express';
 import helmet from 'helmet';
+import { z } from 'zod';
 
 
 import { createRedisClient, healthCheck } from './redis/client';

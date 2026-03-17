@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { getRulesPath } from '../config/rules-loader';
 import { RULES_UPDATE_CHANNEL } from '../config/rules-watcher';
 import { verifyToken } from '../middleware/auth';
-import { getRules, resetLimit } from '../services/rate-limiter.client';
+import { addToBlacklist, addToWhitelist, getRules, resetLimit } from '../services/rate-limiter.client';
 
 import type { ApiResponse, RuleConfig, AdminRulePayload, ResetClientResponse } from '@rateforge/types';
 import type { Request, Response } from 'express';
@@ -278,6 +278,64 @@ export async function postAdminResetClient(
   }
 }
 
+/**
+ * P2-M5-T4 · POST /api/v1/admin/blacklist
+ *
+ * Adds an IP address to the shared blacklist (rate-limiter service).
+ */
+export async function postAdminBlacklist(req: Request, res: Response): Promise<void> {
+  const ip = (req.body as { ip?: unknown })?.ip;
+
+  if (typeof ip !== 'string' || ip.trim() === '') {
+    const body: ApiResponse<never> = {
+      success: false,
+      error: { code: 'BAD_REQUEST', message: 'ip required' }
+    };
+    res.status(HTTP_STATUS_BAD_REQUEST).json(body);
+    return;
+  }
+
+  try {
+    await addToBlacklist(ip);
+    res.status(HTTP_STATUS_OK).json({ success: true, data: { ip, list: 'blacklist' } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message }
+    });
+  }
+}
+
+/**
+ * P2-M5-T4 · POST /api/v1/admin/whitelist
+ *
+ * Adds an IP address to the shared whitelist (rate-limiter service).
+ */
+export async function postAdminWhitelist(req: Request, res: Response): Promise<void> {
+  const ip = (req.body as { ip?: unknown })?.ip;
+
+  if (typeof ip !== 'string' || ip.trim() === '') {
+    const body: ApiResponse<never> = {
+      success: false,
+      error: { code: 'BAD_REQUEST', message: 'ip required' }
+    };
+    res.status(HTTP_STATUS_BAD_REQUEST).json(body);
+    return;
+  }
+
+  try {
+    await addToWhitelist(ip);
+    res.status(HTTP_STATUS_OK).json({ success: true, data: { ip, list: 'whitelist' } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message }
+    });
+  }
+}
+
 // ── Router factory ────────────────────────────────────────────────────────────
 //
 // Usage in app.ts:
@@ -306,3 +364,6 @@ adminRouter.post('/rules', postAdminRules);
  * Resets the rate-limit counters for the given client in Redis.
  */
 adminRouter.post('/reset/:clientId', postAdminResetClient);
+
+adminRouter.post('/blacklist', (req, res, next) => { postAdminBlacklist(req, res).catch(next); });
+adminRouter.post('/whitelist', (req, res, next) => { postAdminWhitelist(req, res).catch(next); });

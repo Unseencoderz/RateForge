@@ -21,6 +21,14 @@ module.exports = {
     'prettier'
   ],
   rules: {
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_'
+      }
+    ],
     'import/order': [
       'error',
       {
@@ -39,5 +47,17 @@ module.exports = {
       }
     ]
   },
+  overrides: [
+    {
+      files: ['**/*.test.ts', '**/*.test.tsx', '**/*.integration.test.ts'],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'off',
+        '@typescript-eslint/no-var-requires': 'off',
+        'prefer-rest-params': 'off',
+        // Keep prod code strict; tests can prioritize clarity over import grouping.
+        'import/order': 'off'
+      }
+    }
+  ],
   ignorePatterns: ['dist/', 'node_modules/']
 };

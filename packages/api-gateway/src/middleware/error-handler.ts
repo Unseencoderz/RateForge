@@ -1,7 +1,7 @@
 import { HTTP_STATUS_INTERNAL_SERVER_ERROR } from '@rateforge/types';
 
-import type { Request, Response, NextFunction } from 'express';
 import type { ApiResponse } from '@rateforge/types';
+import type { Request, Response, NextFunction } from 'express';
 
 /**
  * P2-M1-T2 · Centralised error handler.
