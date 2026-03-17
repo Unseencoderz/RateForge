@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node src/app.ts",
+    "dev": "ts-node src/server.ts",
     "build": "tsc -b",
     "test": "jest --config ../../jest.config.base.js --passWithNoTests",
     "lint": "eslint src --ext .ts --max-warnings=0",

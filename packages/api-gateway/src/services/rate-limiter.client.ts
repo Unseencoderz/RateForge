@@ -1,22 +1,13 @@
-import type {
-  RateLimitRequest,
-  RateLimitResult,
-  RuleConfig,
-} from '@rateforge/types';
+import type { RateLimitRequest, RateLimitResult, RuleConfig } from '@rateforge/types';
 
-const RATE_LIMITER_URL =
-  process.env['RATE_LIMITER_URL'] ?? 'http://localhost:3001';
+const RATE_LIMITER_URL = process.env['RATE_LIMITER_URL'] ?? 'http://localhost:3000';
 
 const DEFAULT_TIMEOUT = 3000;
 
 /**
  * Generic HTTP helper with timeout + safe JSON parsing
  */
-async function httpRequest<T>(
-  path: string,
-  options: RequestInit = {},
-  fallback: T,
-): Promise<T> {
+async function httpRequest<T>(path: string, options: RequestInit = {}, fallback: T): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
 
@@ -47,9 +38,7 @@ async function httpRequest<T>(
 /**
  * Rate limit check (fail-open)
  */
-export async function checkLimit(
-  req: RateLimitRequest,
-): Promise<RateLimitResult> {
+export async function checkLimit(req: RateLimitRequest): Promise<RateLimitResult> {
   const fallback: RateLimitResult = {
     allowed: true,
     limit: Infinity,
@@ -78,20 +67,14 @@ export async function resetLimit(clientId: string): Promise<number> {
     { data: { deletedKeys: 0 } },
   );
 
-  return typeof data?.data?.deletedKeys === 'number'
-    ? data.data.deletedKeys
-    : 0;
+  return typeof data?.data?.deletedKeys === 'number' ? data.data.deletedKeys : 0;
 }
 
 /**
  * Fetch rules
  */
 export async function getRules(): Promise<RuleConfig[]> {
-  const data = await httpRequest<{ data?: RuleConfig[] }>(
-    '/api/v1/rules',
-    {},
-    { data: [] },
-  );
+  const data = await httpRequest<{ data?: RuleConfig[] }>('/api/v1/rules', {}, { data: [] });
 
   return data.data ?? [];
 }

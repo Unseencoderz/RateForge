@@ -1,0 +1,18 @@
+[
+  {
+    "id": "default",
+    "endpointPattern": "*",
+    "windowMs": 60000,
+    "maxRequests": 60,
+    "algorithm": "sliding_window",
+    "enabled": true
+  },
+  {
+    "id": "pro-tier",
+    "endpointPattern": "*",
+    "windowMs": 60000,
+    "maxRequests": 1000,
+    "algorithm": "token_bucket",
+    "enabled": true
+  }
+]

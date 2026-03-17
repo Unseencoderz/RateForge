@@ -7,6 +7,8 @@ import { loadRules } from './config/rules-loader';
 import { startRulesWatcher } from './config/rules-watcher';
 import { adminRouter } from './controllers/admin.controller';
 import { errorHandler } from './middleware/error-handler';
+import { applyRateLimit } from './middleware/rate-limit';
+import { sendRateLimitResponse } from './middleware/rate-limit-response';
 import { attachRequestId } from './middleware/request-id';
 import { healthCheck } from './services/health-check';
 
@@ -24,6 +26,11 @@ app.use(express.json());
 // Attaches a UUID v4 to `req.id` and sets `X-Request-ID` response header on
 // every request. Downstream middleware and logs use this as the correlation ID.
 app.use(attachRequestId);
+
+// ── Rate limiting (P2-M3) ─────────────────────────────────────────────────────
+// Runs for all routes (including /health) so local load tests reflect real limits.
+app.use(applyRateLimit);
+app.use(sendRateLimitResponse);
 
 // ── Health / readiness endpoints (P2-M1-T4) ───────────────────────────────────
 //
@@ -70,7 +77,7 @@ app.use(errorHandler);
 export async function initApp(): Promise<void> {
   // Validate rules.json on startup so a misconfigured file is caught immediately.
   // The watcher will apply the rules to the rate-limiter when it fires.
-  loadRules();  // throws on invalid config → process.exit(1) via server.ts catch
+  loadRules(); // throws on invalid config → process.exit(1) via server.ts catch
 
   console.info('[app] rules.json validated — starting hot-reload watcher');
 
@@ -81,6 +88,6 @@ export async function initApp(): Promise<void> {
     },
     onError: (err) => {
       console.error('[app] Rules hot-reload error (keeping existing rules):', err);
-    }
+    },
   });
 }
