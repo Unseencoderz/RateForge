@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rateforge-dashboard
+  labels:
+    app: rateforge-dashboard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rateforge-dashboard
+  template:
+    metadata:
+      labels:
+        app: rateforge-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: ghcr.io/yourusername/rateforge-dashboard:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: '50m'
+              memory: '64Mi'
+            limits:
+              cpu: '100m'
+              memory: '128Mi'
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10

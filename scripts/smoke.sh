@@ -202,6 +202,86 @@ case $TASK in
     bash scripts/smoke.sh P2-M5-T4
     ;;
 
+  P3-M1-T1)
+    echo "SDK scaffold smoke: instantiate RateForgeClient and verify constructor guards..."
+    node -r ts-node/register -e "
+      const { RateForgeClient } = require('./packages/sdk/index.ts');
+      const client = new RateForgeClient({
+        baseUrl: process.env.GATEWAY_URL || 'http://localhost:8080',
+        apiKey: process.env.JWT_SECRET    || 'dev-secret',
+      });
+      console.log('RateForgeClient instantiated OK');
+      // Verify constructor guards
+      try {
+        new RateForgeClient({ baseUrl: '', apiKey: 'x' });
+        process.exit(1); // should not reach here
+      } catch (e) {
+        console.log('Empty baseUrl guard OK:', e.message);
+      }
+      try {
+        new RateForgeClient({ baseUrl: 'http://localhost', apiKey: '' });
+        process.exit(1);
+      } catch (e) {
+        console.log('Empty apiKey guard OK:', e.message);
+      }
+    "
+    ;;
+
+  P3-M1-T2)
+    echo "SDK checkLimit smoke..."
+    node -r ts-node/register -e "
+      (async () => {
+        const { RateForgeClient } = require('./packages/sdk/index.ts');
+        const { AlgorithmType } = require('./packages/types/src/index.ts');
+
+        const client = new RateForgeClient({
+          baseUrl: process.env.GATEWAY_URL || 'http://localhost:8080',
+          apiKey:  process.env.JWT_SECRET  || 'dev-secret',
+        });
+
+        const result = await client.checkLimit({
+          clientId:  'sdk-smoke-user',
+          identity:  { userId: 'sdk-smoke-user', ip: '127.0.0.1', tier: 'pro' },
+          endpoint:  '/api/v1/test',
+          method:    'GET',
+          timestamp: Date.now(),
+          algorithm: AlgorithmType.TOKEN_BUCKET,
+        });
+
+        if (typeof result.allowed !== 'boolean') process.exit(1);
+        console.log('checkLimit result:', JSON.stringify(result));
+      })().catch((e) => {
+        console.error(e);
+        process.exit(1);
+      });
+    "
+    ;;
+
+  P3-M1-T3)
+    echo "SDK getRules + resetLimit smoke..."
+    node -r ts-node/register -e "
+      (async () => {
+        const { RateForgeClient } = require('./packages/sdk/index.ts');
+
+        const client = new RateForgeClient({
+          baseUrl: process.env.GATEWAY_URL || 'http://localhost:8080',
+          apiKey:  process.env.JWT_SECRET  || 'dev-secret',
+        });
+
+        const rules = await client.getRules();
+        if (!Array.isArray(rules) || rules.length < 1) process.exit(1);
+        console.log('getRules OK — rule count:', rules.length);
+
+        const reset = await client.resetLimit('sdk-smoke-user');
+        if (reset.clientId !== 'sdk-smoke-user') process.exit(1);
+        console.log('resetLimit OK — deletedKeys:', reset.deletedKeys);
+      })().catch((e) => {
+        console.error(e);
+        process.exit(1);
+      });
+    "
+    ;;
+
   *)
     echo "No smoke test defined for task $TASK"
     echo "Run: bash scripts/smoke.sh <task-id>"

@@ -1,5 +1,8 @@
 # RateForge
 
+![CI Pipeline](https://github.com/yourusername/rateforge/actions/workflows/pr.yml/badge.svg)
+![Coverage](https://img.shields.io/badge/Coverage-80%25-brightgreen.svg)
+![Deployment Status](https://github.com/yourusername/rateforge/actions/workflows/deploy.yml/badge.svg)
 Distributed rate limiting platform with Redis-backed counters, API gateway middleware, and a metrics dashboard.
 
 ## ASCII architecture (high level)
@@ -52,4 +55,3 @@ pnpm dev
 ```
 
 > This README is a skeleton. As phases complete, fill in detailed setup, configuration, and usage instructions per service.
-

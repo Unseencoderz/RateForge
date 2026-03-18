@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: rateforge-redis
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - rateforge_redis_data:/data
+    networks:
+      - ${NETWORK:-rateforge-net}
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: packages/api-gateway/Dockerfile
+    container_name: rateforge-api-gateway
+    ports:
+      - '${GATEWAY_PORT:-3000}:3000'
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=change-me
+      - PORT=3000
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ${NETWORK:-rateforge-net}
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  rate-limiter:
+    build:
+      context: .
+      dockerfile: packages/rate-limiter/Dockerfile
+    container_name: rateforge-rate-limiter
+    ports:
+      - '${LIMITER_PORT:-3001}:3001'
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - PORT=3001
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ${NETWORK:-rateforge-net}
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3001/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: packages/dashboard/Dockerfile
+    container_name: rateforge-dashboard
+    ports:
+      - '${DASHBOARD_PORT:-4000}:80'
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks:
+      - ${NETWORK:-rateforge-net}
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  rateforge_redis_data:
+    name: rateforge_redis_data
+
+networks:
+  rateforge-net:
+    name: ${NETWORK:-rateforge-net}

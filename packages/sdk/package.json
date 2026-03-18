@@ -1,0 +1,27 @@
+{
+  "name": "@rateforge/sdk",
+  "version": "0.1.0",
+  "description": "Thin HTTP client SDK for the RateForge API gateway",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "jest --config ../../jest.config.base.js --passWithNoTests",
+    "lint": "eslint src --ext .ts --max-warnings=0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rateforge/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "msw": "^2.0.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
