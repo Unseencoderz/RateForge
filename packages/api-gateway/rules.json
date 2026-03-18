@@ -1,17 +1,32 @@
 [
   {
-    "id": "default",
+    "id": "free-tier-global",
+    "description": "Free tier: 30 requests per minute across all endpoints",
+    "clientTier": "free",
     "endpointPattern": "*",
     "windowMs": 60000,
-    "maxRequests": 60,
-    "algorithm": "sliding_window",
+    "maxRequests": 30,
+    "burstCapacity": 5,
+    "algorithm": "token_bucket",
     "enabled": true
   },
   {
-    "id": "pro-tier",
+    "id": "pro-tier-global",
+    "description": "Pro tier: 120 requests per minute across all endpoints",
+    "clientTier": "pro",
     "endpointPattern": "*",
     "windowMs": 60000,
-    "maxRequests": 1000,
+    "maxRequests": 120,
+    "burstCapacity": 20,
+    "algorithm": "token_bucket",
+    "enabled": true
+  },
+  {
+    "id": "default",
+    "description": "Default fallback: 60 requests per minute for any unmatched client",
+    "endpointPattern": "*",
+    "windowMs": 60000,
+    "maxRequests": 60,
     "algorithm": "token_bucket",
     "enabled": true
   }
