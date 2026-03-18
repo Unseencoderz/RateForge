@@ -27,8 +27,8 @@ jest.spyOn(process, 'exit').mockImplementation((code?: string | number | null | 
 // ── Mock fs ───────────────────────────────────────────────────────────────────
 
 jest.mock('fs');
-const writeFileSyncMock = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => { });
-const renameSyncMock = jest.spyOn(fs, 'renameSync').mockImplementation(() => { });
+const writeFileSyncMock = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+const renameSyncMock = jest.spyOn(fs, 'renameSync').mockImplementation(() => {});
 
 // ── Mock IORedis (publisher) ──────────────────────────────────────────────────
 
@@ -36,7 +36,7 @@ const publishMock = jest.fn<() => Promise<number>>().mockResolvedValue(1);
 
 jest.mock('ioredis', () => {
   const MockIORedis = jest.fn().mockImplementation(() => ({
-    publish: publishMock
+    publish: publishMock,
   }));
   (MockIORedis as any).default = MockIORedis;
   return { __esModule: true, default: MockIORedis };
@@ -51,19 +51,19 @@ jest.mock('@rateforge/config', () => ({ REDIS_URL: 'redis://localhost:6379' }));
 const FAKE_RULES_PATH = '/fake/rules.json';
 
 jest.mock('../config/rules-loader', () => ({
-  getRulesPath: () => FAKE_RULES_PATH
+  getRulesPath: () => FAKE_RULES_PATH,
 }));
 
 // ── Mock rules-watcher (only need the channel constant) ───────────────────────
 
 jest.mock('../config/rules-watcher', () => ({
-  RULES_UPDATE_CHANNEL: 'rateforge:rules:update'
+  RULES_UPDATE_CHANNEL: 'rateforge:rules:update',
 }));
 
 // ── Mock getRules (not used by POST but imported in module) ───────────────────
 
 jest.mock('../services/rate-limiter.client', () => ({
-  getRules: jest.fn().mockReturnValue([])
+  getRules: jest.fn().mockReturnValue([]),
 }));
 
 jest.mock('../middleware/auth', () => ({
@@ -83,7 +83,7 @@ const VALID_RULE: RuleConfig = {
   windowMs: 60_000,
   maxRequests: 60,
   algorithm: AlgorithmType.TOKEN_BUCKET,
-  enabled: true
+  enabled: true,
 };
 
 const VALID_BODY = { rules: [VALID_RULE] };
@@ -108,10 +108,10 @@ function buildRouterApp() {
 describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(console, 'info').mockImplementation(() => { });
-    jest.spyOn(console, 'error').mockImplementation(() => { });
-    writeFileSyncMock.mockImplementation(() => { });
-    renameSyncMock.mockImplementation(() => { });
+    jest.spyOn(console, 'info').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    writeFileSyncMock.mockImplementation(() => {});
+    renameSyncMock.mockImplementation(() => {});
     publishMock.mockResolvedValue(1);
   });
 
@@ -149,9 +149,37 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
       expect(res.body.data).toHaveLength(2);
     });
 
+    it('supports "delete" semantics by replacing the full rules array (remove a rule)', async () => {
+      const twoRules = [VALID_RULE, { ...VALID_RULE, id: 'to-remove', maxRequests: 5 }];
+
+      await request(buildHandlerApp()).post('/rules').send({ rules: twoRules });
+      await request(buildHandlerApp())
+        .post('/rules')
+        .send({ rules: [VALID_RULE] });
+
+      const writtenSecond = JSON.parse(writeFileSyncMock.mock.calls[1]?.[1] as string);
+      expect(writtenSecond).toHaveLength(1);
+      expect(writtenSecond[0].id).toBe('default');
+    });
+
+    it('supports "update" semantics by replacing an existing rule with same id', async () => {
+      const updated = { ...VALID_RULE, maxRequests: 999 };
+
+      await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
+      await request(buildHandlerApp())
+        .post('/rules')
+        .send({ rules: [updated] });
+
+      const writtenSecond = JSON.parse(writeFileSyncMock.mock.calls[1]?.[1] as string);
+      expect(writtenSecond[0].id).toBe('default');
+      expect(writtenSecond[0].maxRequests).toBe(999);
+    });
+
     it('normalises method to uppercase before persisting', async () => {
       const ruleWithLower = { ...VALID_RULE, method: 'post' };
-      const res = await request(buildHandlerApp()).post('/rules').send({ rules: [ruleWithLower] });
+      const res = await request(buildHandlerApp())
+        .post('/rules')
+        .send({ rules: [ruleWithLower] });
 
       expect(res.status).toBe(201);
       expect(res.body.data[0].method).toBe('POST');
@@ -167,7 +195,7 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         `${FAKE_RULES_PATH}.tmp`,
         expect.any(String),
-        'utf-8'
+        'utf-8',
       );
     });
 
@@ -181,16 +209,17 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
     it('renames the .tmp file to the real rules path', async () => {
       await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
-      expect(renameSyncMock).toHaveBeenCalledWith(
-        `${FAKE_RULES_PATH}.tmp`,
-        FAKE_RULES_PATH
-      );
+      expect(renameSyncMock).toHaveBeenCalledWith(`${FAKE_RULES_PATH}.tmp`, FAKE_RULES_PATH);
     });
 
     it('writes before renaming (correct atomic order)', async () => {
       const callOrder: string[] = [];
-      writeFileSyncMock.mockImplementation(() => { callOrder.push('write'); });
-      renameSyncMock.mockImplementation(() => { callOrder.push('rename'); });
+      writeFileSyncMock.mockImplementation(() => {
+        callOrder.push('write');
+      });
+      renameSyncMock.mockImplementation(() => {
+        callOrder.push('rename');
+      });
 
       await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
@@ -223,9 +252,16 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
 
     it('publishes after the file write (correct ordering)', async () => {
       const callOrder: string[] = [];
-      writeFileSyncMock.mockImplementation(() => { callOrder.push('write'); });
-      renameSyncMock.mockImplementation(() => { callOrder.push('rename'); });
-      publishMock.mockImplementation(async () => { callOrder.push('publish'); return 1; });
+      writeFileSyncMock.mockImplementation(() => {
+        callOrder.push('write');
+      });
+      renameSyncMock.mockImplementation(() => {
+        callOrder.push('rename');
+      });
+      publishMock.mockImplementation(async () => {
+        callOrder.push('publish');
+        return 1;
+      });
 
       await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
@@ -254,7 +290,9 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
 
     it('returns HTTP 400 when a required field is missing (id)', async () => {
       const { id: _, ...noId } = VALID_RULE as any;
-      const res = await request(buildHandlerApp()).post('/rules').send({ rules: [noId] });
+      const res = await request(buildHandlerApp())
+        .post('/rules')
+        .send({ rules: [noId] });
 
       expect(res.status).toBe(400);
     });
@@ -359,7 +397,9 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
     });
 
     it('does NOT publish to Redis when disk write fails', async () => {
-      writeFileSyncMock.mockImplementationOnce(() => { throw new Error('disk full'); });
+      writeFileSyncMock.mockImplementationOnce(() => {
+        throw new Error('disk full');
+      });
 
       await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
@@ -392,9 +432,7 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
 
   describe('adminRouter wiring', () => {
     it('responds to POST /api/v1/admin/rules with HTTP 201 when mounted via adminRouter', async () => {
-      const res = await request(buildRouterApp())
-        .post('/api/v1/admin/rules')
-        .send(VALID_BODY);
+      const res = await request(buildRouterApp()).post('/api/v1/admin/rules').send(VALID_BODY);
 
       expect(res.status).toBe(201);
     });

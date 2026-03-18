@@ -28,11 +28,13 @@ import type { RateLimitResult } from '@rateforge/types';
 // ── Module mock: replace RateLimitService with a controllable stub ───────────
 
 const checkLimitMock = jest.fn<() => Promise<RateLimitResult>>();
+const isBlacklistedMock = jest.fn<() => Promise<boolean>>();
+const isWhitelistedMock = jest.fn<() => Promise<boolean>>();
 
 jest.mock('../services/rate-limiter.client', () => ({
   checkLimit: (...args: any[]) => (checkLimitMock as any)(...args),
-  isBlacklisted: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
-  isWhitelisted: jest.fn<() => Promise<boolean>>().mockResolvedValue(false),
+  isBlacklisted: (...args: any[]) => (isBlacklistedMock as any)(...args),
+  isWhitelisted: (...args: any[]) => (isWhitelistedMock as any)(...args),
 }));
 
 // ── Import AFTER mock registration ───────────────────────────────────────────
@@ -52,7 +54,7 @@ const ALLOWED_RESULT: RateLimitResult = {
   limit: 60,
   remaining: 42,
   resetAt: RESET_AT,
-  ruleId: 'default'
+  ruleId: 'default',
 };
 
 const BLOCKED_RESULT: RateLimitResult = {
@@ -62,7 +64,7 @@ const BLOCKED_RESULT: RateLimitResult = {
   resetAt: RESET_AT,
   retryAfterMs: 45_000,
   ruleId: 'default',
-  reason: 'TOKEN_BUCKET_EXHAUSTED'
+  reason: 'TOKEN_BUCKET_EXHAUSTED',
 };
 
 // ── Helper: build a minimal Express app with the two middlewares under test ──
@@ -76,12 +78,12 @@ function buildApp() {
     (req as any).clientIdentity = {
       userId: 'user-integration-test',
       ip: '127.0.0.1',
-      tier: 'pro'
+      tier: 'pro',
     };
     next();
   });
 
-  app.use(applyRateLimit);        // P2-M3-T1 — attaches req.rateLimitResult
+  app.use(applyRateLimit); // P2-M3-T1 — attaches req.rateLimitResult
   app.use(sendRateLimitResponse); // P2-M3-T2 — sets headers or sends 429
 
   // Sentinel route — reached only when the request is allowed through
@@ -97,6 +99,10 @@ function buildApp() {
 describe('P2-M3-T3 · Rate limit middleware integration (Supertest)', () => {
   beforeEach(() => {
     checkLimitMock.mockReset();
+    isBlacklistedMock.mockReset();
+    isWhitelistedMock.mockReset();
+    isBlacklistedMock.mockResolvedValue(false);
+    isWhitelistedMock.mockResolvedValue(false);
     jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
   });
 
@@ -269,6 +275,34 @@ describe('P2-M3-T3 · Rate limit middleware integration (Supertest)', () => {
     });
   });
 
+  // ── Blacklist / Whitelist behaviour (P2-M5-T4) ────────────────────────────
+
+  describe('blacklist / whitelist checks', () => {
+    it('blacklisted IP returns HTTP 403 and does not call checkLimit()', async () => {
+      isBlacklistedMock.mockResolvedValueOnce(true);
+      isWhitelistedMock.mockResolvedValueOnce(false);
+      checkLimitMock.mockResolvedValueOnce(ALLOWED_RESULT);
+
+      const res = await request(buildApp()).get('/api/v1/test');
+
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+      expect(checkLimitMock).not.toHaveBeenCalled();
+    });
+
+    it('whitelisted IP bypasses checkLimit() and reaches handler', async () => {
+      isBlacklistedMock.mockResolvedValueOnce(false);
+      isWhitelistedMock.mockResolvedValueOnce(true);
+
+      const res = await request(buildApp()).get('/api/v1/test');
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe('reached handler');
+      expect(checkLimitMock).not.toHaveBeenCalled();
+    });
+  });
+
   // ── No-rule-matched: Infinity headers omitted ──────────────────────────────
 
   describe('when no rule matched (limit = Infinity)', () => {
@@ -277,7 +311,7 @@ describe('P2-M3-T3 · Rate limit middleware integration (Supertest)', () => {
       limit: Infinity,
       remaining: Infinity,
       resetAt: RESET_AT,
-      reason: 'NO_RULE_MATCHED'
+      reason: 'NO_RULE_MATCHED',
     };
 
     it('returns HTTP 200', async () => {
@@ -319,9 +353,28 @@ describe('P2-M3-T3 · Rate limit middleware integration (Supertest)', () => {
     it('allows requests while tokens remain then blocks on exhaustion', async () => {
       // Simulate a client that has one token left, then exhausts it
       checkLimitMock
-        .mockResolvedValueOnce({ allowed: true,  limit: 2, remaining: 1, resetAt: RESET_AT, ruleId: 'tight' })
-        .mockResolvedValueOnce({ allowed: true,  limit: 2, remaining: 0, resetAt: RESET_AT, ruleId: 'tight' })
-        .mockResolvedValueOnce({ allowed: false, limit: 2, remaining: 0, resetAt: RESET_AT, retryAfterMs: 30_000, ruleId: 'tight' });
+        .mockResolvedValueOnce({
+          allowed: true,
+          limit: 2,
+          remaining: 1,
+          resetAt: RESET_AT,
+          ruleId: 'tight',
+        })
+        .mockResolvedValueOnce({
+          allowed: true,
+          limit: 2,
+          remaining: 0,
+          resetAt: RESET_AT,
+          ruleId: 'tight',
+        })
+        .mockResolvedValueOnce({
+          allowed: false,
+          limit: 2,
+          remaining: 0,
+          resetAt: RESET_AT,
+          retryAfterMs: 30_000,
+          ruleId: 'tight',
+        });
 
       const app = buildApp();
 

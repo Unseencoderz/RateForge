@@ -1,8 +1,71 @@
 #!/bin/bash
-# Usage: bash scripts/smoke.sh P2-M5-T2
-# Runs the smoke test for a specific completed task
+# Usage:
+#   bash scripts/smoke.sh P2-M5-T5
+#
+# This script is intentionally lightweight and CI-friendly:
+# - Uses curl + node (no jq dependency)
+# - Assumes services are already running (or a CI job started them)
+# - Exits non-zero on failure
+
+set -euo pipefail
 
 TASK=$1
+
+GATEWAY_URL="${GATEWAY_URL:-http://localhost:3000}"
+
+if [[ -z "$TASK" ]]; then
+  echo "Missing task id."
+  echo "Example: bash scripts/smoke.sh P2-M5-T5"
+  exit 2
+fi
+
+TOKEN="$(
+  node -e "
+    const jwt = require('jsonwebtoken');
+    const secret = process.env.JWT_SECRET || 'test-secret';
+    const token = jwt.sign({ userId: 'smoke-user', tier: 'pro' }, secret, { expiresIn: '5m' });
+    console.log(token);
+  " 2>/dev/null
+)"
+
+if [[ -z "$TOKEN" ]]; then
+  echo "Failed to generate JWT. Ensure dependencies installed and JWT_SECRET matches the gateway."
+  exit 2
+fi
+
+curl_json() {
+  # Usage: curl_json <method> <url> [curl args...]
+  # Prints body to stdout. Exits non-zero on non-2xx or invalid/empty JSON.
+  local method="$1"
+  local url="$2"
+  shift 2
+
+  local out
+  if ! out="$(curl -sS -X "$method" "$url" "$@" -w $'\n%{http_code}')"; then
+    echo "curl failed calling $method $url" >&2
+    exit 1
+  fi
+
+  local code body
+  code="$(printf '%s' "$out" | tail -n 1)"
+  body="$(printf '%s' "$out" | sed '$d')"
+
+  if [[ ! "$code" =~ ^2 ]]; then
+    echo "HTTP $code from $method $url" >&2
+    echo "Body:" >&2
+    printf '%s\n' "$body" >&2
+    exit 1
+  fi
+
+  if [[ -z "${body// }" ]]; then
+    echo "Empty body from $method $url (HTTP $code)" >&2
+    exit 1
+  fi
+
+  # Validate JSON
+  node -e "JSON.parse(require('fs').readFileSync(0,'utf8'))" <<<"$body" >/dev/null
+  printf '%s' "$body"
+}
 
 case $TASK in
 
@@ -69,10 +132,11 @@ case $TASK in
 
   P2-M5-T1)
     echo "Testing GET /api/v1/admin/rules..."
-    curl -sf http://localhost:3000/api/v1/admin/rules \
-      -H "Authorization: Bearer test-token" | node -e "
+    curl_json GET "$GATEWAY_URL/api/v1/admin/rules" \
+      -H "Authorization: Bearer $TOKEN" | node -e "
         let d=''; process.stdin.on('data',c=>d+=c).on('end',()=>{
           const r=JSON.parse(d);
+          if (!r.success) process.exit(1);
           console.log('Rules returned:', Array.isArray(r.data) ? r.data.length : '?');
         });
       "
@@ -80,56 +144,67 @@ case $TASK in
 
   P2-M5-T2)
     echo "Testing POST /api/v1/admin/rules..."
-
-    # 1. Create a rule
-    RESULT=$(curl -sf -X POST http://localhost:3000/api/v1/admin/rules \
+    RESULT="$(curl_json POST "$GATEWAY_URL/api/v1/admin/rules" \
       -H "Content-Type: application/json" \
-      -H "Authorization: Bearer test-token" \
-      -d '{"route":"/smoke-test","limit":3,"windowMs":60000,"algorithm":"TOKEN_BUCKET"}')
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{"rules":[{"id":"smoke-default","endpointPattern":"*","windowMs":60000,"maxRequests":60,"algorithm":"token_bucket","enabled":true}]}' \
+    )"
     echo "Create rule response: $RESULT"
-
-    # 2. Verify it was persisted
-    echo ""
-    echo "rules.json content:"
-    cat packages/api-gateway/rules.json 2>/dev/null || echo "❌ rules.json not found"
-
-    # 3. Verify GET returns the new rule
-    echo ""
-    echo "GET /admin/rules after creation:"
-    curl -sf http://localhost:3000/api/v1/admin/rules \
-      -H "Authorization: Bearer test-token"
-
-    # 4. Verify Redis pub/sub fired
-    echo ""
-    echo "Check your api-gateway logs for: rateforge:rules:update"
+    echo "$RESULT" | node -e "
+      let d=''; process.stdin.on('data',c=>d+=c).on('end',()=>{
+        const r=JSON.parse(d);
+        if (r.success !== true) process.exit(1);
+        if (!Array.isArray(r.data) || r.data.length < 1) process.exit(1);
+      });
+    "
     ;;
 
   P2-M5-T3)
     echo "Testing POST /api/v1/admin/reset/:clientId..."
-    curl -sf -X POST http://localhost:3000/api/v1/admin/reset/test-client \
-      -H "Authorization: Bearer test-token"
-    echo ""
-    echo "✅ If 200 returned, reset works"
+    curl_json POST "$GATEWAY_URL/api/v1/admin/reset/smoke-client" \
+      -H "Authorization: Bearer $TOKEN" | node -e "
+        let d=''; process.stdin.on('data',c=>d+=c).on('end',()=>{
+          const r=JSON.parse(d);
+          if (!r.success) process.exit(1);
+          if (!r.data || r.data.clientId !== 'smoke-client') process.exit(1);
+        });
+      "
     ;;
 
   P2-M5-T4)
     echo "Testing whitelist/blacklist..."
-    # Blacklist an IP
-    curl -sf -X POST http://localhost:3000/api/v1/admin/blacklist \
+    curl_json POST "$GATEWAY_URL/api/v1/admin/blacklist" \
       -H "Content-Type: application/json" \
-      -H "Authorization: Bearer test-token" \
-      -d '{"ip":"1.2.3.4"}'
-    echo ""
-    echo "Now send request as blacklisted IP — expect 403:"
-    curl -sf -o /dev/null -w "HTTP %{http_code}\n" \
-      http://localhost:3000/api/v1/test \
-      -H "X-Forwarded-For: 1.2.3.4" \
-      -H "Authorization: Bearer test-token"
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{"ip":"1.2.3.4"}' | node -e "
+        let d=''; process.stdin.on('data',c=>d+=c).on('end',()=>{
+          const r=JSON.parse(d);
+          if (!r.success) process.exit(1);
+        });
+      "
+
+    curl_json POST "$GATEWAY_URL/api/v1/admin/whitelist" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{"ip":"10.0.0.1"}' | node -e "
+        let d=''; process.stdin.on('data',c=>d+=c).on('end',()=>{
+          const r=JSON.parse(d);
+          if (!r.success) process.exit(1);
+        });
+      "
+    ;;
+
+  P2-M5-T5)
+    echo "Admin API smoke: rules + reset + lists"
+    bash scripts/smoke.sh P2-M5-T1
+    bash scripts/smoke.sh P2-M5-T2
+    bash scripts/smoke.sh P2-M5-T3
+    bash scripts/smoke.sh P2-M5-T4
     ;;
 
   *)
     echo "No smoke test defined for task $TASK"
     echo "Run: bash scripts/smoke.sh <task-id>"
-    echo "Example: bash scripts/smoke.sh P2-M5-T2"
+    echo "Example: bash scripts/smoke.sh P2-M5-T5"
     ;;
 esac
