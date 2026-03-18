@@ -1,0 +1,12 @@
+export declare const DEFAULT_WINDOW_MS = 60000;
+export declare const MAX_BURST = 20;
+export declare const REDIS_KEY_PREFIX = "rateforge:rl";
+export declare const HTTP_STATUS_OK = 200;
+export declare const HTTP_STATUS_CREATED = 201;
+export declare const HTTP_STATUS_BAD_REQUEST = 400;
+export declare const HTTP_STATUS_UNAUTHORIZED = 401;
+export declare const HTTP_STATUS_FORBIDDEN = 403;
+export declare const HTTP_STATUS_NOT_FOUND = 404;
+export declare const HTTP_STATUS_TOO_MANY_REQUESTS = 429;
+export declare const HTTP_STATUS_INTERNAL_SERVER_ERROR = 500;
+//# sourceMappingURL=constants.d.ts.map

@@ -3,24 +3,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "baseUrl": ".",
-    "paths": {
-      "@rateforge/types": [
-        "../types/src/index.ts"
-      ],
-      "@rateforge/types/*": [
-        "../types/src/*"
-      ],
-      "@rateforge/config": [
-        "../config/src/index.ts"
-      ],
-      "@rateforge/config/*": [
-        "../config/src/*"
-      ],
-      "@rateforge/rate-limiter/*": [
-        "../rate-limiter/src/*"
-      ]
-    }
+    "baseUrl": "."
   },
   "include": [
     "src"

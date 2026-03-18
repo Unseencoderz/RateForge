@@ -108,7 +108,7 @@ describe('RateLimitService resilience (P1-M6-T3)', () => {
       const results = await Promise.all(
         Array.from({ length: 5 }, () => checkLimit(makeReq()))
       );
-      const allowedCount = results.filter((r) => r.allowed).length;
+      const allowedCount = results.filter((r: any) => r.allowed).length;
       // All 5 should be allowed (limit is 10)
       expect(allowedCount).toBe(5);
     });

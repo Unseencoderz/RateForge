@@ -49,7 +49,7 @@ export function getAlgorithm(rule: RuleConfig): RateLimiterAlgorithm {
 
     default: {
       // TypeScript exhaustiveness guard
-      const exhaustive: never = rule.algorithm;
+      const exhaustive: never = rule.algorithm as never;
       throw new Error(`[algorithm-factory] Unknown algorithm type: "${String(exhaustive)}"`);
     }
   }
