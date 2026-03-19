@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm --filter @rateforge/dashboard build"
+
+[deploy]
+startCommand = "npx serve -s dist -l 4000"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"

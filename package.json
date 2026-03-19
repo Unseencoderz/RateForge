@@ -7,7 +7,7 @@
   ],
   "scripts": {
     "dev": "pnpm -r dev",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @rateforge/types build && pnpm --filter @rateforge/config build && pnpm -r --filter !@rateforge/types --filter !@rateforge/config build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
