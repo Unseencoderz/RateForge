@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node src/server.ts",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc -b",
     "test": "jest --config ../../jest.config.base.js --passWithNoTests",
     "lint": "eslint src --ext .ts --max-warnings=0",
@@ -26,6 +26,7 @@
     "@types/jsonwebtoken": "^9.0.0",
     "@types/supertest": "^6.0.0",
     "@types/uuid": "^11.0.0",
-    "supertest": "^6.3.4"
+    "supertest": "^6.3.4",
+    "tsx": "^4.21.0"
   }
 }
