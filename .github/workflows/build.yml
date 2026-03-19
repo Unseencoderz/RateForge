@@ -6,7 +6,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/rateforge
+  # GHCR requires strictly lowercase repository names.
+  # github.repository_owner may contain uppercase letters (e.g. Unseencoderz).
+  IMAGE_PREFIX: ghcr.io/unseencoderz/rateforge
 
 jobs:
   build:
