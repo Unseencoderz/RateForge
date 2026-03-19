@@ -1,23 +1,17 @@
-FROM node:20-alpine AS builder
+FROM node:22.14-alpine AS builder
 
 WORKDIR /app
-RUN corepack enable pnpm
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 
-# Copy root configurations and workspaces
 COPY . .
-
-# Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Build the workspace (dashboard builds to packages/dashboard/dist)
-RUN pnpm run -r build
+# This builds the static files into /app/packages/dashboard/dist
+RUN pnpm --filter @rateforge/dashboard build
 
-# Stage 2: Serve
 FROM nginx:alpine AS runner
-
-# Copy the built React app to the NGINX html serving directory
+# Ensure path matches the build output exactly
 COPY --from=builder /app/packages/dashboard/dist /usr/share/nginx/html
-
 EXPOSE 80
-
 CMD ["nginx", "-g", "daemon off;"]

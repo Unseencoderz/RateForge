@@ -1,1 +1,3 @@
 22.14.0
+# Required for pnpm 10 monorepos to bundle workspace dependencies
+inject-workspace-packages = true
