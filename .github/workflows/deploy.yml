@@ -2,13 +2,19 @@ name: Deploy to Railway
 
 on:
   workflow_run:
-    workflows: ["Build & Push Docker Images"]
+    workflows: ['Build & Push Docker Images']
     types: [completed]
     branches: [main]
 
+env:
+  # March 2026: Opt-in to Node 24 to clear deprecation warnings
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Railway CLI requirements
+  RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+
 jobs:
   deploy:
-    name: Deploy to Railway
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
@@ -18,17 +24,11 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Deploy api-gateway
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Deploy API Gateway
         run: railway up --service api-gateway --detach
 
-      - name: Deploy rate-limiter
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Deploy Rate Limiter
         run: railway up --service rate-limiter --detach
 
-      - name: Deploy dashboard
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Deploy Dashboard
         run: railway up --service dashboard --detach
