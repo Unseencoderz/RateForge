@@ -31,6 +31,7 @@ ENV NODE_ENV=production
 COPY --from=builder /prod/api-gateway/dist ./dist
 COPY --from=builder /prod/api-gateway/node_modules ./node_modules
 COPY --from=builder /prod/api-gateway/package.json ./package.json
+COPY --from=builder /app/packages/api-gateway/rules.json ./rules.json
 
 USER node
 EXPOSE 3000
