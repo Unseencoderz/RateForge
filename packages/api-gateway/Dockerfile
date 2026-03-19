@@ -1,4 +1,3 @@
-# Use Node 22.14 to satisfy Vite/Rolldown requirements
 FROM node:22.14-alpine AS builder
 
 WORKDIR /app
@@ -13,14 +12,16 @@ COPY packages/api-gateway/package.json ./packages/api-gateway/
 COPY packages/config/package.json ./packages/config/
 COPY packages/types/package.json ./packages/types/
 
-# Partial install for build
-RUN pnpm install --frozen-lockfile
+# Install dependencies (ignoring scripts to avoid husky errors in Docker)
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
-# Copy source and build
+# Copy source code
 COPY . .
-RUN pnpm run -r build
 
-# Deploy with pnpm 10 (Requires the .npmrc inject-workspace-packages = true)
+# FIX: Build ONLY the gateway and its dependencies (config/types)
+RUN pnpm --filter @rateforge/api-gateway... build
+
+# Deploy with pnpm 10
 RUN pnpm deploy --filter @rateforge/api-gateway --prod /prod/api-gateway
 
 FROM node:22.14-alpine AS runner
