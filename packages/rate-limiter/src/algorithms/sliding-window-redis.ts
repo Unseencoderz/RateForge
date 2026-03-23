@@ -56,46 +56,34 @@ export class SlidingWindowRedis implements RateLimiterAlgorithm {
   private readonly redis: Redis;
 
   constructor(redis: Redis, limit: number, windowMs: number) {
-    this.redis    = redis;
-    this.limit    = limit;
+    this.redis = redis;
+    this.limit = limit;
     this.windowMs = windowMs;
   }
 
-  async checkAsync(key: string, _cost = 1): Promise<RateLimitResult> {
-  void _cost;
+  async check(key: string, _cost = 1): Promise<RateLimitResult> {
+    void _cost;
     const nowMs = Date.now();
 
-    const raw = await this.redis.eval(
+    const raw = (await this.redis.eval(
       SLIDING_WINDOW_SCRIPT,
       1,
       key,
       String(this.limit),
       String(nowMs),
-      String(this.windowMs)
-    ) as [number, number, number];
+      String(this.windowMs),
+    )) as [number, number, number];
 
     const [allowedRaw, remaining, resetAt] = raw;
     const allowed = allowedRaw === 1;
 
     return {
       allowed,
-      limit:        this.limit,
-      remaining:    Math.max(0, remaining),
+      limit: this.limit,
+      remaining: Math.max(0, remaining),
       resetAt,
       retryAfterMs: allowed ? undefined : Math.max(0, resetAt - nowMs),
-      reason:       allowed ? undefined : 'SLIDING_WINDOW_EXCEEDED',
+      reason: allowed ? undefined : 'SLIDING_WINDOW_EXCEEDED',
     };
   }
-
-  /** Synchronous stub — satisfies interface. Callers must use checkAsync(). */
-  check(key: string, cost = 1): RateLimitResult {
-    void key; void cost;
-    return {
-      allowed:   true,
-      limit:     this.limit,
-      remaining: this.limit,
-      resetAt:   Date.now() + this.windowMs,
-      reason:    'REDIS_ASYNC_REQUIRED',
-    };
-  }
-}   
+}

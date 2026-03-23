@@ -1,5 +1,5 @@
-import type { Server }  from 'http';
-import type { Redis }   from 'ioredis';
+import type { Server } from 'http';
+import type { Redis } from 'ioredis';
 
 /**
  * P1-M6-T2 · Graceful shutdown handler.
@@ -15,14 +15,22 @@ import type { Redis }   from 'ioredis';
  *
  * @param redis  The singleton Redis client to disconnect on shutdown.
  * @param server The HTTP server returned by app.listen().
+ * @param cleanup Optional async cleanup for additional long-lived resources.
  */
-export function registerShutdown(redis: Redis, server: Server): void {
+export function registerShutdown(
+  redis: Redis,
+  server: Server,
+  cleanup?: () => Promise<void>,
+): void {
   const shutdown = async (signal: string): Promise<void> => {
     console.info(`[shutdown] Received ${signal} — starting graceful shutdown`);
 
     server.close(async () => {
-      console.info('[shutdown] HTTP server closed — disconnecting Redis');
+      console.info('[shutdown] HTTP server closed — cleaning up resources');
       try {
+        if (cleanup) {
+          await cleanup();
+        }
         await redis.quit();
         console.info('[shutdown] Redis disconnected — exiting');
       } catch (err) {
@@ -40,5 +48,5 @@ export function registerShutdown(redis: Redis, server: Server): void {
   };
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
-  process.on('SIGINT',  () => void shutdown('SIGINT'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
 }

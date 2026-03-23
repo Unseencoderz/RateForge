@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: dashboard
-          image: ghcr.io/yourusername/rateforge-dashboard:latest
+          image: ghcr.io/unseencoderz/rateforge/dashboard:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80

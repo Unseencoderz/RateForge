@@ -26,7 +26,8 @@ services:
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=change-me
+      - RATE_LIMITER_URL=http://rate-limiter:3001
+      - JWT_SECRET=change-me-in-production
       - PORT=3000
     depends_on:
       redis:
@@ -49,6 +50,7 @@ services:
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=change-me-in-production
       - PORT=3001
     depends_on:
       redis:

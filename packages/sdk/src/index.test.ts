@@ -7,7 +7,7 @@ describe('RateForgeClient', () => {
 
   beforeEach(() => {
     client = new RateForgeClient({
-      baseUrl: 'http://localhost:8080',
+      baseUrl: 'http://localhost:3001',
       apiKey: 'test-api-key',
       timeoutMs: 100,
     });
@@ -64,7 +64,7 @@ describe('RateForgeClient', () => {
       expect(result.remaining).toBe(99);
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v1/check',
+        'http://localhost:3001/api/v1/check',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -119,7 +119,7 @@ describe('RateForgeClient', () => {
       expect(res.clientId).toBe('user-123');
       expect(res.deletedKeys).toBe(5);
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v1/admin/reset/user-123',
+        'http://localhost:3001/api/v1/admin/reset/user-123',
         expect.objectContaining({
           method: 'POST',
         }),

@@ -1,22 +1,12 @@
 import { REDIS_URL } from '@rateforge/config';
+import { RULES_UPDATE_CHANNEL } from '@rateforge/types';
 import IORedis from 'ioredis';
 
 import { loadRules } from './rules-loader';
 
 import type { RuleConfig } from '@rateforge/types';
 
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-/**
- * The Redis Pub/Sub channel that triggers a rule reload.
- *
- * Any service that updates `rules.json` on disk must publish to this channel
- * after the write completes. The admin API (P2-M5-T2) does this automatically.
- *
- * Exported so publishers (admin controller, tests) use the exact same string.
- */
-export const RULES_UPDATE_CHANNEL = 'rateforge:rules:update';
+export { RULES_UPDATE_CHANNEL } from '@rateforge/types';
 
 // ── Callback type ─────────────────────────────────────────────────────────────
 
@@ -81,15 +71,13 @@ export interface RulesWatcherHandle {
  * await handle.stop();
  * ```
  */
-export function startRulesWatcher(
-  options: RulesWatcherOptions
-): RulesWatcherHandle {
+export function startRulesWatcher(options: RulesWatcherOptions): RulesWatcherHandle {
   const { rulesPath, onReloaded, onError } = options;
 
   const defaultOnError: OnReloadError = (err) => {
     console.error(
       '[rules-watcher] Hot-reload failed — keeping existing rules active.\n',
-      err instanceof Error ? err.message : String(err)
+      err instanceof Error ? err.message : String(err),
     );
   };
 
@@ -107,11 +95,10 @@ export function startRulesWatcher(
     retryStrategy(times: number) {
       const delay = Math.min(times * 300, 10_000);
       console.warn(
-        `[rules-watcher] Redis subscriber reconnect attempt ${times}, ` +
-        `retrying in ${delay}ms…`
+        `[rules-watcher] Redis subscriber reconnect attempt ${times}, ` + `retrying in ${delay}ms…`,
       );
       return delay;
-    }
+    },
   });
 
   // ── Subscribe ───────────────────────────────────────────────────────────────
@@ -120,14 +107,14 @@ export function startRulesWatcher(
     if (err) {
       handleError(
         new Error(
-          `[rules-watcher] Failed to subscribe to "${RULES_UPDATE_CHANNEL}": ${err.message}`
-        )
+          `[rules-watcher] Failed to subscribe to "${RULES_UPDATE_CHANNEL}": ${err.message}`,
+        ),
       );
       return;
     }
     console.info(
       `[rules-watcher] Subscribed to "${RULES_UPDATE_CHANNEL}" ` +
-      `(active subscriptions: ${count}).`
+        `(active subscriptions: ${count}).`,
     );
   });
 
@@ -146,7 +133,7 @@ export function startRulesWatcher(
       // and route them through onError so the gateway stays up.
       const newRules = loadRules(rulesPath);
       console.info(
-        `[rules-watcher] Rules reloaded successfully (${newRules.length} rule(s) active).`
+        `[rules-watcher] Rules reloaded successfully (${newRules.length} rule(s) active).`,
       );
       onReloaded(newRules);
     } catch (err) {

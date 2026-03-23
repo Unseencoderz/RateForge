@@ -4,12 +4,39 @@ import jwt from 'jsonwebtoken';
 import type { ClientIdentity } from '@rateforge/types';
 import type { Request, Response, NextFunction } from 'express';
 
+export interface AuthTokenPayload {
+  userId: string;
+  tier?: string;
+  role?: string;
+  roles?: string[];
+  scopes?: string[];
+  permissions?: string[];
+  isAdmin?: boolean;
+}
+
+function hasAdminAccess(payload: AuthTokenPayload): boolean {
+  const roles = payload.roles ?? [];
+  const scopes = payload.scopes ?? [];
+  const permissions = payload.permissions ?? [];
+
+  return (
+    payload.isAdmin === true ||
+    payload.role === 'admin' ||
+    roles.includes('admin') ||
+    scopes.includes('admin') ||
+    scopes.includes('admin:rules') ||
+    permissions.includes('admin') ||
+    permissions.includes('admin:rules')
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/no-namespace
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       clientIdentity?: ClientIdentity;
+      authToken?: AuthTokenPayload;
     }
   }
 }
@@ -24,11 +51,7 @@ declare global {
  * - The header is absent or not in `Bearer <token>` form
  * - The token is expired, revoked, or otherwise invalid
  */
-export async function verifyToken(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
+export async function verifyToken(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers['authorization'];
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -36,8 +59,8 @@ export async function verifyToken(
       success: false,
       error: {
         code: 'UNAUTHORIZED',
-        message: 'Missing or malformed Authorization header.'
-      }
+        message: 'Missing or malformed Authorization header.',
+      },
     });
     return;
   }
@@ -45,16 +68,14 @@ export async function verifyToken(
   const token = authHeader.slice(7); // strip "Bearer "
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as {
-      userId: string;
-      tier?: string;
-    };
+    const payload = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;
 
     req.clientIdentity = {
       userId: payload.userId,
       ip: req.ip ?? req.socket.remoteAddress ?? '0.0.0.0',
-      tier: payload.tier ?? 'free'
+      tier: payload.tier ?? 'free',
     };
+    req.authToken = payload;
 
     next();
   } catch {
@@ -62,8 +83,25 @@ export async function verifyToken(
       success: false,
       error: {
         code: 'UNAUTHORIZED',
-        message: 'Invalid or expired token.'
-      }
+        message: 'Invalid or expired token.',
+      },
     });
   }
+}
+
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const payload = req.authToken;
+
+  if (!payload || !hasAdminAccess(payload)) {
+    res.status(403).json({
+      success: false,
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Admin privileges are required for this endpoint.',
+      },
+    });
+    return;
+  }
+
+  next();
 }

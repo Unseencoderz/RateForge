@@ -1,4 +1,4 @@
-import { AlgorithmType , REDIS_KEY_PREFIX } from '@rateforge/types';
+import { AlgorithmType, REDIS_KEY_PREFIX } from '@rateforge/types';
 
 import { getAlgorithm } from '../algorithms/factory';
 import { createRedisClient } from '../redis/client';
@@ -7,8 +7,8 @@ import type { RateLimiterAlgorithm } from '../algorithms/interface';
 import type { RateLimitRequest, RateLimitResult, RuleConfig } from '@rateforge/types';
 
 /**
- * Minimal in-memory rule store used until the full dynamic-rules loader
- * (P2-M4-T1) is wired in. Rules can be replaced via `setRules()`.
+ * Active rules are cached in-process for fast reads, but the source of truth
+ * is the shared Redis rules store populated by the gateway admin workflow.
  */
 let activeRules: RuleConfig[] = [
   {
@@ -18,13 +18,14 @@ let activeRules: RuleConfig[] = [
     windowMs: 60_000,
     maxRequests: 60,
     algorithm: AlgorithmType.TOKEN_BUCKET,
-    enabled: true
-  }
+    enabled: true,
+  },
 ];
 
 /** Replace the active rule set (called by the rules-watcher at runtime). */
 export function setRules(rules: RuleConfig[]): void {
   activeRules = rules;
+  algorithmCache.clear();
 }
 
 /**
@@ -59,18 +60,14 @@ export async function resetLimit(clientId: string): Promise<number> {
 
   // Sanitise to prevent glob injection in the SCAN pattern
   const safeClient = clientId.replace(/[*?[\]]/g, '\\$&');
-  const pattern    = `${REDIS_KEY_PREFIX}:*:${safeClient}:*`;
+  const pattern = `${REDIS_KEY_PREFIX}:*:${safeClient}:*`;
 
-  let cursor        = '0';
-  let totalDeleted  = 0;
-  const BATCH_SIZE  = 100;
+  let cursor = '0';
+  let totalDeleted = 0;
+  const BATCH_SIZE = 100;
 
   do {
-    const [nextCursor, keys] = await redis.scan(
-      cursor,
-      'MATCH', pattern,
-      'COUNT', BATCH_SIZE
-    );
+    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', BATCH_SIZE);
 
     cursor = nextCursor;
 
@@ -88,12 +85,11 @@ export async function resetLimit(clientId: string): Promise<number> {
   algorithmCache.clear();
 
   console.info(
-    `[rate-limit-service] resetLimit: deleted ${totalDeleted} key(s) for client "${clientId}"`
+    `[rate-limit-service] resetLimit: deleted ${totalDeleted} key(s) for client "${clientId}"`,
   );
 
   return totalDeleted;
 }
-
 
 /**
  * Find the most specific matching rule for a given request.
@@ -114,15 +110,14 @@ function matchRule(req: RateLimitRequest): RuleConfig | undefined {
   const tierMatch = sorted.find(
     (r) =>
       r.clientTier === req.identity.tier &&
-      (r.endpointPattern === '*' || req.endpoint.startsWith(r.endpointPattern))
+      (r.endpointPattern === '*' || req.endpoint.startsWith(r.endpointPattern)),
   );
   if (tierMatch) return tierMatch;
 
   // Fall back to the first matching rule that does not require a specific tier
   return sorted.find(
     (r) =>
-      !r.clientTier &&
-      (r.endpointPattern === '*' || req.endpoint.startsWith(r.endpointPattern))
+      !r.clientTier && (r.endpointPattern === '*' || req.endpoint.startsWith(r.endpointPattern)),
   );
 }
 
@@ -148,7 +143,7 @@ function getOrCreateAlgorithm(rule: RuleConfig): RateLimiterAlgorithm {
   const cached = algorithmCache.get(rule.id);
   if (cached) return cached;
 
-  const instance = getAlgorithm(rule);
+  const instance = getAlgorithm(rule, createRedisClient());
   algorithmCache.set(rule.id, instance);
   return instance;
 }
@@ -166,9 +161,7 @@ function getOrCreateAlgorithm(rule: RuleConfig): RateLimiterAlgorithm {
  * If no rule matches, the request is allowed (fail-open by design) and
  * `ruleId` is omitted from the result.
  */
-export async function checkLimit(
-  req: RateLimitRequest
-): Promise<RateLimitResult> {
+export async function checkLimit(req: RateLimitRequest): Promise<RateLimitResult> {
   const rule = matchRule(req);
 
   if (!rule) {
@@ -179,18 +172,17 @@ export async function checkLimit(
       remaining: Infinity,
       resetAt: req.timestamp + 60_000,
       ruleId: undefined,
-      reason: 'NO_RULE_MATCHED'
+      reason: 'NO_RULE_MATCHED',
     };
   }
 
   const key = buildKey(req, rule.id);
   const algorithm = getOrCreateAlgorithm(rule);
 
-  // Unified interface: check() is synchronous for in-memory algorithms.
-  const result = algorithm.check(key, 1);
+  const result = await algorithm.check(key, 1);
 
   return {
     ...result,
-    ruleId: rule.id
+    ruleId: rule.id,
   };
 }

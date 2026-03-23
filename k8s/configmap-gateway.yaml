@@ -10,3 +10,4 @@ data:
   LOG_LEVEL: 'info'
   # In Kubernetes, we use the internal service name for Redis
   REDIS_URL: 'redis://rateforge-redis:6379'
+  RATE_LIMITER_URL: 'http://rateforge-limiter:3001'

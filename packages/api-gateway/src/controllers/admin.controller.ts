@@ -1,44 +1,32 @@
 import fs from 'fs';
 import path from 'path';
 
-import { REDIS_URL } from '@rateforge/config';
 import {
   HTTP_STATUS_OK,
   HTTP_STATUS_CREATED,
   HTTP_STATUS_BAD_REQUEST,
-  HTTP_STATUS_INTERNAL_SERVER_ERROR
+  HTTP_STATUS_INTERNAL_SERVER_ERROR,
 } from '@rateforge/types';
 import express, { Router } from 'express';
-import IORedis from 'ioredis';
 import { z } from 'zod';
 
 import { getRulesPath } from '../config/rules-loader';
-import { RULES_UPDATE_CHANNEL } from '../config/rules-watcher';
-import { verifyToken } from '../middleware/auth';
-import { addToBlacklist, addToWhitelist, getRules, resetLimit } from '../services/rate-limiter.client';
+import { persistRulesToStore } from '../config/rules-store';
+import { requireAdmin, verifyToken } from '../middleware/auth';
+import {
+  addToBlacklist,
+  addToWhitelist,
+  getRules,
+  resetLimit,
+} from '../services/rate-limiter.client';
 
-import type { ApiResponse, RuleConfig, AdminRulePayload, ResetClientResponse } from '@rateforge/types';
+import type {
+  ApiResponse,
+  RuleConfig,
+  AdminRulePayload,
+  ResetClientResponse,
+} from '@rateforge/types';
 import type { Request, Response } from 'express';
-
-// ── Publisher connection ──────────────────────────────────────────────────────
-//
-// ⚠️  This is the only module that publishes to RULES_UPDATE_CHANNEL.
-//    A regular (non-subscriber) IORedis instance is used intentionally —
-//    a subscribed client cannot issue PUBLISH or any other commands.
-//
-// The connection is lazily created and reused across requests to avoid the
-// overhead of a new TCP handshake on every rule update.
-let publisher: IORedis | null = null;
-
-function getPublisher(): IORedis {
-  if (!publisher) {
-    publisher = new IORedis(REDIS_URL, {
-      maxRetriesPerRequest: 3,
-      connectTimeout: 5_000
-    });
-  }
-  return publisher;
-}
 
 // ── Body validation schema ────────────────────────────────────────────────────
 //
@@ -47,23 +35,30 @@ function getPublisher(): IORedis {
 // Using AlgorithmType enum values directly keeps this schema in sync with
 // the shared types package.
 
-const AlgorithmTypeValues = ['fixed_window', 'sliding_window', 'token_bucket', 'leaky_bucket'] as const;
+const AlgorithmTypeValues = [
+  'fixed_window',
+  'sliding_window',
+  'token_bucket',
+  'leaky_bucket',
+] as const;
 
-const RuleConfigBodySchema = z.object({
-  id:              z.string().min(1),
-  description:     z.string().optional(),
-  clientTier:      z.string().optional(),
-  endpointPattern: z.string().min(1),
-  method:          z.string().toUpperCase().optional(),
-  windowMs:        z.number().int().positive(),
-  maxRequests:     z.number().int().positive(),
-  burstCapacity:   z.number().int().nonnegative().optional(),
-  algorithm:       z.enum(AlgorithmTypeValues),
-  enabled:         z.boolean()
-}).strict();
+const RuleConfigBodySchema = z
+  .object({
+    id: z.string().min(1),
+    description: z.string().optional(),
+    clientTier: z.string().optional(),
+    endpointPattern: z.string().min(1),
+    method: z.string().toUpperCase().optional(),
+    windowMs: z.number().int().positive(),
+    maxRequests: z.number().int().positive(),
+    burstCapacity: z.number().int().nonnegative().optional(),
+    algorithm: z.enum(AlgorithmTypeValues),
+    enabled: z.boolean(),
+  })
+  .strict();
 
 const AdminRulePayloadSchema = z.object({
-  rules: z.array(RuleConfigBodySchema).min(1, 'At least one rule is required')
+  rules: z.array(RuleConfigBodySchema).min(1, 'At least one rule is required'),
 });
 
 // ── Deduplication guard ───────────────────────────────────────────────────────
@@ -91,11 +86,11 @@ function findDuplicateIds(rules: RuleConfig[]): string[] {
  */
 export async function getAdminRules(req: Request, res: Response): Promise<void> {
   try {
-    const rules = await getRules() as RuleConfig[];
+    const rules = (await getRules()) as RuleConfig[];
 
     const body: ApiResponse<RuleConfig[]> = {
       success: true,
-      data: rules
+      data: rules,
     };
 
     res.status(HTTP_STATUS_OK).json(body);
@@ -106,8 +101,8 @@ export async function getAdminRules(req: Request, res: Response): Promise<void> 
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: `Failed to retrieve rules: ${message}`
-      }
+        message: `Failed to retrieve rules: ${message}`,
+      },
     };
 
     res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json(body);
@@ -133,9 +128,9 @@ export async function getAdminRules(req: Request, res: Response): Promise<void> 
  *   3. Atomically write the validated rules to `rules.json` on disk.
  *      (Writes to a `.tmp` file then renames so a crash mid-write cannot
  *       produce a partially-written file that breaks the next hot-reload.)
- *   4. Publish a message to `RULES_UPDATE_CHANNEL`.
- *      The rules-watcher (P2-M4-T2) receives the message, re-reads the
- *      file, and calls `setRules()` to apply the new config in memory.
+ *   4. Persist the validated rule set into the shared Redis rules store.
+ *      Rate-limiter instances subscribe for updates and apply the new config
+ *      in memory without requiring a restart.
  *   5. Respond 201 with the validated rule set.
  *
  * Error contract:
@@ -148,17 +143,17 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
 
   if (!parseResult.success) {
     const issues = parseResult.error.issues.map((i) => ({
-      path:    i.path.join('.'),
-      message: i.message
+      path: i.path.join('.'),
+      message: i.message,
     }));
 
     const body: ApiResponse<never> = {
       success: false,
       error: {
-        code:    'INVALID_RULE_CONFIG',
+        code: 'INVALID_RULE_CONFIG',
         message: 'Request body failed schema validation.',
-        details: issues
-      }
+        details: issues,
+      },
     };
     res.status(HTTP_STATUS_BAD_REQUEST).json(body);
     return;
@@ -173,9 +168,9 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
     const body: ApiResponse<never> = {
       success: false,
       error: {
-        code:    'INVALID_RULE_CONFIG',
-        message: `Duplicate rule ids: ${dupes.join(', ')}. Each rule must have a unique id.`
-      }
+        code: 'INVALID_RULE_CONFIG',
+        message: `Duplicate rule ids: ${dupes.join(', ')}. Each rule must have a unique id.`,
+      },
     };
     res.status(HTTP_STATUS_BAD_REQUEST).json(body);
     return;
@@ -188,29 +183,25 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
     // This prevents a partially-written `rules.json` from being read by the
     // hot-reload watcher between the open() and close() syscalls.
     const rulesPath = getRulesPath();
-    const tmpPath   = `${rulesPath}.tmp`;
-    const json      = JSON.stringify(payload.rules, null, 2);
+    const tmpPath = `${rulesPath}.tmp`;
+    const json = JSON.stringify(payload.rules, null, 2);
 
     fs.writeFileSync(tmpPath, json, 'utf-8');
     fs.renameSync(tmpPath, rulesPath);
 
     console.info(
-      `[admin] rules.json updated (${payload.rules.length} rule(s)) → ${path.basename(rulesPath)}`
+      `[admin] rules.json updated (${payload.rules.length} rule(s)) → ${path.basename(rulesPath)}`,
     );
 
-    // ── 4. Publish hot-reload signal ────────────────────────────────────────
-    //
-    // The rules-watcher subscribes to this channel and responds within ~1 s
-    // by re-reading the file and calling setRules().
-    await getPublisher().publish(RULES_UPDATE_CHANNEL, 'update');
+    // ── 4. Persist to the shared Redis rules store ──────────────────────────
+    await persistRulesToStore(payload.rules);
 
     // ── 5. Respond 201 ─────────────────────────────────────────────────────
     const body: ApiResponse<RuleConfig[]> = {
       success: true,
-      data:    payload.rules
+      data: payload.rules,
     };
     res.status(HTTP_STATUS_CREATED).json(body);
-
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
@@ -219,9 +210,9 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
     const body: ApiResponse<never> = {
       success: false,
       error: {
-        code:    'INTERNAL_ERROR',
-        message: `Failed to persist rules: ${message}`
-      }
+        code: 'INTERNAL_ERROR',
+        message: `Failed to persist rules: ${message}`,
+      },
     };
     res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json(body);
   }
@@ -241,17 +232,14 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
  * Response 400: clientId param missing or empty
  * Response 500: Redis error
  */
-export async function postAdminResetClient(
-  req: Request,
-  res: Response
-): Promise<void> {
+export async function postAdminResetClient(req: Request, res: Response): Promise<void> {
   const { clientId } = req.params;
 
   // ── Validate param ──────────────────────────────────────────────────────────
   if (!clientId || clientId.trim() === '') {
     const body: ApiResponse<never> = {
       success: false,
-      error: { code: 'BAD_REQUEST', message: 'clientId param must be a non-empty string.' }
+      error: { code: 'BAD_REQUEST', message: 'clientId param must be a non-empty string.' },
     };
     res.status(HTTP_STATUS_BAD_REQUEST).json(body);
     return;
@@ -261,18 +249,17 @@ export async function postAdminResetClient(
     const deletedKeys = await resetLimit(clientId);
 
     const body: ApiResponse<ResetClientResponse> = {
-      success:  true,
-      data: { clientId, deletedKeys }
+      success: true,
+      data: { clientId, deletedKeys },
     };
     res.status(HTTP_STATUS_OK).json(body);
-
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[admin] resetLimit failed for "${clientId}": ${message}`);
 
     const body: ApiResponse<never> = {
       success: false,
-      error: { code: 'INTERNAL_ERROR', message: `Failed to reset client: ${message}` }
+      error: { code: 'INTERNAL_ERROR', message: `Failed to reset client: ${message}` },
     };
     res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json(body);
   }
@@ -289,7 +276,7 @@ export async function postAdminBlacklist(req: Request, res: Response): Promise<v
   if (typeof ip !== 'string' || ip.trim() === '') {
     const body: ApiResponse<never> = {
       success: false,
-      error: { code: 'BAD_REQUEST', message: 'ip required' }
+      error: { code: 'BAD_REQUEST', message: 'ip required' },
     };
     res.status(HTTP_STATUS_BAD_REQUEST).json(body);
     return;
@@ -302,7 +289,7 @@ export async function postAdminBlacklist(req: Request, res: Response): Promise<v
     const message = err instanceof Error ? err.message : String(err);
     res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
       success: false,
-      error: { code: 'INTERNAL_ERROR', message }
+      error: { code: 'INTERNAL_ERROR', message },
     });
   }
 }
@@ -318,7 +305,7 @@ export async function postAdminWhitelist(req: Request, res: Response): Promise<v
   if (typeof ip !== 'string' || ip.trim() === '') {
     const body: ApiResponse<never> = {
       success: false,
-      error: { code: 'BAD_REQUEST', message: 'ip required' }
+      error: { code: 'BAD_REQUEST', message: 'ip required' },
     };
     res.status(HTTP_STATUS_BAD_REQUEST).json(body);
     return;
@@ -331,7 +318,7 @@ export async function postAdminWhitelist(req: Request, res: Response): Promise<v
     const message = err instanceof Error ? err.message : String(err);
     res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
       success: false,
-      error: { code: 'INTERNAL_ERROR', message }
+      error: { code: 'INTERNAL_ERROR', message },
     });
   }
 }
@@ -349,9 +336,12 @@ adminRouter.use(express.json());
 
 // Protect all admin routes with JWT auth
 adminRouter.use(verifyToken);
+adminRouter.use(requireAdmin);
 
 /** GET /api/v1/admin/rules — returns the currently active rule set */
-adminRouter.get('/rules', (req, res, next) => { getAdminRules(req, res).catch(next); });
+adminRouter.get('/rules', (req, res, next) => {
+  getAdminRules(req, res).catch(next);
+});
 
 /**
  * POST /api/v1/admin/rules — replaces the rule set.
@@ -365,5 +355,9 @@ adminRouter.post('/rules', postAdminRules);
  */
 adminRouter.post('/reset/:clientId', postAdminResetClient);
 
-adminRouter.post('/blacklist', (req, res, next) => { postAdminBlacklist(req, res).catch(next); });
-adminRouter.post('/whitelist', (req, res, next) => { postAdminWhitelist(req, res).catch(next); });
+adminRouter.post('/blacklist', (req, res, next) => {
+  postAdminBlacklist(req, res).catch(next);
+});
+adminRouter.post('/whitelist', (req, res, next) => {
+  postAdminWhitelist(req, res).catch(next);
+});

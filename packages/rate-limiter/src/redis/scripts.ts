@@ -124,7 +124,7 @@ export async function executeTokenBucket(
   refillRatePerMs: number,
   cost: number,
   nowMs: number,
-  windowMs: number
+  windowMs: number,
 ): Promise<TokenBucketRedisResult> {
   const args = [
     String(capacity),
@@ -140,15 +140,13 @@ export async function executeTokenBucket(
     const sha = await loadScript(redis);
     raw = await redis.evalsha(sha, 1, key, ...args);
   } catch (err: unknown) {
-    // NOSCRIPT: script was flushed from Redis — fall back to EVAL
+    // Redis script commands are not always available in mocks or after restart.
+    // Fall back to plain EVAL so the limiter keeps working.
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('NOSCRIPT')) {
-      // Invalidate cache so next call re-loads
       shaCache.delete(redis);
-      raw = await redis.eval(getScriptSrc(), 1, key, ...args);
-    } else {
-      throw err;
     }
+    raw = await redis.eval(getScriptSrc(), 1, key, ...args);
   }
 
   const [allowedRaw, remainingRaw, resetAtRaw] = raw as [number, number, number];

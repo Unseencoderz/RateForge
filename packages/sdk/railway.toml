@@ -1,6 +1,0 @@
-[build]
-builder = "nixpacks"
-buildCommand = "exit 0"
-
-[deploy]
-startCommand = "exit 0"

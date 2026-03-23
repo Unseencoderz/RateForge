@@ -4,7 +4,7 @@ import express from 'express';
 import helmet from 'helmet';
 
 import { loadRules } from './config/rules-loader';
-import { startRulesWatcher } from './config/rules-watcher';
+import { seedRulesStore } from './config/rules-store';
 import { adminRouter } from './controllers/admin.controller';
 import { errorHandler } from './middleware/error-handler';
 import { applyRateLimit } from './middleware/rate-limit';
@@ -15,6 +15,7 @@ import { healthCheck } from './services/health-check';
 import type { Express, Request, Response } from 'express';
 
 export const app: Express = express();
+app.set('trust proxy', true);
 
 // ── Core middleware ────────────────────────────────────────────────────────────
 app.use(helmet());
@@ -27,30 +28,35 @@ app.use(express.json());
 // every request. Downstream middleware and logs use this as the correlation ID.
 app.use(attachRequestId);
 
-// ── Rate limiting (P2-M3) ─────────────────────────────────────────────────────
-// Runs for all routes (including /health) so local load tests reflect real limits.
-app.use(applyRateLimit);
-app.use(sendRateLimitResponse);
-
 // ── Health / readiness endpoints (P2-M1-T4) ───────────────────────────────────
 //
 // /health  → Kubernetes liveness probe (always 200 if process is alive)
-// /ready   → Kubernetes readiness probe (checks Redis connectivity)
+// /ready   → Kubernetes readiness probe (checks Redis + rate-limiter connectivity)
 app.get('/health', (_req: Request, res: Response) => {
   res.status(HTTP_STATUS_OK).json({ status: 'ok' });
 });
 
 app.get('/ready', async (_req: Request, res: Response): Promise<void> => {
-  const redisOk = await healthCheck();
-  if (redisOk) {
-    res.status(HTTP_STATUS_OK).json({ status: 'ready', redis: 'connected' });
+  const readiness = await healthCheck();
+  if (readiness.redis && readiness.rateLimiter) {
+    res.status(HTTP_STATUS_OK).json({
+      status: 'ready',
+      redis: 'connected',
+      rateLimiter: 'reachable',
+    });
   } else {
-    res.status(503).json({ status: 'not ready', redis: 'disconnected' });
+    res.status(503).json({
+      status: 'not ready',
+      redis: readiness.redis ? 'connected' : 'disconnected',
+      rateLimiter: readiness.rateLimiter ? 'reachable' : 'unreachable',
+    });
   }
 });
 
 // ── API v1 router ─────────────────────────────────────────────────────────────
 const apiRouter = express.Router();
+apiRouter.use(applyRateLimit);
+apiRouter.use(sendRateLimitResponse);
 app.use('/api/v1', apiRouter);
 
 // Admin routes (P2-M5): GET/POST /rules, POST /reset/:clientId
@@ -69,25 +75,14 @@ app.use(errorHandler);
  *
  * Called from server.ts after the HTTP server is listening.
  *
- * Rules are loaded from disk and applied to the rate-limiter service's in-memory store
- * via the hot-reload watcher (startRulesWatcher). The api-gateway process itself does
- * not maintain a rule store — it delegates all rate-limit decisions to the rate-limiter
- * service over HTTP.
+ * The gateway treats `rules.json` as a bootstrap source only.
+ * The shared Redis rules store is the cross-instance source of truth used by
+ * the rate-limiter service.
  */
 export async function initApp(): Promise<void> {
-  // Validate rules.json on startup so a misconfigured file is caught immediately.
-  // The watcher will apply the rules to the rate-limiter when it fires.
-  loadRules(); // throws on invalid config → process.exit(1) via server.ts catch
-
-  console.info('[app] rules.json validated — starting hot-reload watcher');
-
-  // Start hot-reload watcher for runtime rule updates
-  startRulesWatcher({
-    onReloaded: (rules) => {
-      console.info(`[app] Hot-reloaded ${rules.length} rule(s)`);
-    },
-    onError: (err) => {
-      console.error('[app] Rules hot-reload error (keeping existing rules):', err);
-    },
-  });
+  const rules = loadRules();
+  const seedResult = await seedRulesStore(rules);
+  console.info(
+    `[app] rules store initialised (${seedResult}) with ${rules.length} rule(s) validated from disk`,
+  );
 }

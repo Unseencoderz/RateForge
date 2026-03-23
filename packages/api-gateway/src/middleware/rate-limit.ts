@@ -1,11 +1,6 @@
-
 import { AlgorithmType } from '@rateforge/types';
 
-import {
-  checkLimit,
-  isBlacklisted,
-  isWhitelisted
-} from '../services/rate-limiter.client';
+import { checkLimit, isBlacklisted, isWhitelisted } from '../services/rate-limiter.client';
 
 import type { RateLimitRequest, RateLimitResult } from '@rateforge/types';
 import type { Request, Response, NextFunction } from 'express';
@@ -41,38 +36,38 @@ declare global {
  *     separate `rate-limit-response` middleware (P2-M3-T2).  Keeping the check
  *     and response separate makes each piece independently testable.
  *
- * ⚠️  This middleware must be registered AFTER `verifyToken` (P2-M2-T1) so
- *     that `req.clientIdentity` is guaranteed to be populated.
+ * If auth middleware has already run, authenticated identities are used for
+ * per-user limits. Otherwise the middleware falls back to anonymous IP-based
+ * limiting so public routes still work safely.
  */
 export async function applyRateLimit(
   req: Request,
   _res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
+  const endpoint = `${req.baseUrl}${req.path}` || req.originalUrl;
+
   // Guard: if auth middleware did not run (misconfigured pipeline), treat
   // the client as anonymous rather than crashing.
   const identity = req.clientIdentity ?? {
     userId: 'anonymous',
     ip: req.ip ?? req.socket?.remoteAddress ?? '0.0.0.0',
-    tier: 'free'
+    tier: 'free',
   };
 
   const rlRequest: RateLimitRequest = {
     // Composite client identifier: userId takes precedence over raw IP so that
     // authenticated users share a per-account limit across multiple IPs.
-    clientId: identity.userId !== 'anonymous'
-      ? identity.userId
-      : identity.ip,
+    clientId: identity.userId !== 'anonymous' ? identity.userId : identity.ip,
     identity,
-    endpoint: req.path,
+    endpoint,
     method: req.method,
     timestamp: Date.now(),
     // The factory selects the concrete algorithm based on the matched rule;
     // passing TOKEN_BUCKET here is an advisory hint only.
-    algorithm: AlgorithmType.TOKEN_BUCKET
+    algorithm: AlgorithmType.TOKEN_BUCKET,
   };
 
-  
   try {
     // Blacklist check — immediate 403, before rate-limit algorithm
     const clientIp = identity.ip;
@@ -83,11 +78,11 @@ export async function applyRateLimit(
 
     if (blacklisted) {
       req.rateLimitResult = {
-        allowed:   false,
-        limit:     0,
+        allowed: false,
+        limit: 0,
         remaining: 0,
-        resetAt:   rlRequest.timestamp + 60_000,
-        reason:    'BLACKLISTED',
+        resetAt: rlRequest.timestamp + 60_000,
+        reason: 'BLACKLISTED',
       };
       next();
       return;
@@ -95,11 +90,11 @@ export async function applyRateLimit(
 
     if (whitelisted) {
       req.rateLimitResult = {
-        allowed:   true,
-        limit:     Infinity,
+        allowed: true,
+        limit: Infinity,
         remaining: Infinity,
-        resetAt:   rlRequest.timestamp + 60_000,
-        reason:    'WHITELISTED',
+        resetAt: rlRequest.timestamp + 60_000,
+        reason: 'WHITELISTED',
       };
       next();
       return;
@@ -116,7 +111,7 @@ export async function applyRateLimit(
       limit: Infinity,
       remaining: Infinity,
       resetAt: rlRequest.timestamp + 60_000,
-      reason: 'RATE_LIMIT_SERVICE_ERROR'
+      reason: 'RATE_LIMIT_SERVICE_ERROR',
     };
 
     // Surface the error so the error-handler middleware can log / emit metrics.

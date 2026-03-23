@@ -19,7 +19,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        service: [api-gateway, rate-limiter, dashboard]
+        service: [api-gateway, rate-limiter]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

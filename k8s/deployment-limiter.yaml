@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: limiter
-          image: ghcr.io/yourusername/rateforge-rate-limiter:latest
+          image: ghcr.io/unseencoderz/rateforge/rate-limiter:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3001

@@ -1,0 +1,23 @@
+# Node dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+build
+**/dist
+**/build
+
+# Ignore TypeScript build caches
+**/*.tsbuildinfo
+
+# Git files
+.git
+.gitignore
+
+# Environment files
+.env
+
+# Docker-related
+Dockerfile
+docker-compose.yml

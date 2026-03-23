@@ -23,7 +23,7 @@ TOKEN="$(
   node -e "
     const jwt = require('jsonwebtoken');
     const secret = process.env.JWT_SECRET || 'test-secret';
-    const token = jwt.sign({ userId: 'smoke-user', tier: 'pro' }, secret, { expiresIn: '5m' });
+    const token = jwt.sign({ userId: 'smoke-user', tier: 'pro', role: 'admin' }, secret, { expiresIn: '5m' });
     console.log(token);
   " 2>/dev/null
 )"
@@ -207,7 +207,7 @@ case $TASK in
     node -r ts-node/register -e "
       const { RateForgeClient } = require('./packages/sdk/index.ts');
       const client = new RateForgeClient({
-        baseUrl: process.env.GATEWAY_URL || 'http://localhost:8080',
+        baseUrl: process.env.GATEWAY_URL || 'http://localhost:3001',
         apiKey: process.env.JWT_SECRET    || 'dev-secret',
       });
       console.log('RateForgeClient instantiated OK');
@@ -235,7 +235,7 @@ case $TASK in
         const { AlgorithmType } = require('./packages/types/src/index.ts');
 
         const client = new RateForgeClient({
-          baseUrl: process.env.GATEWAY_URL || 'http://localhost:8080',
+          baseUrl: process.env.GATEWAY_URL || 'http://localhost:3001',
           apiKey:  process.env.JWT_SECRET  || 'dev-secret',
         });
 
@@ -264,7 +264,7 @@ case $TASK in
         const { RateForgeClient } = require('./packages/sdk/index.ts');
 
         const client = new RateForgeClient({
-          baseUrl: process.env.GATEWAY_URL || 'http://localhost:8080',
+          baseUrl: process.env.GATEWAY_URL || 'http://localhost:3001',
           apiKey:  process.env.JWT_SECRET  || 'dev-secret',
         });
 

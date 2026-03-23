@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 
-import { verifyToken } from './auth';
+import { requireAdmin, verifyToken } from './auth';
 
 import type { ClientIdentity } from '@rateforge/types';
 
@@ -8,7 +8,7 @@ import type { ClientIdentity } from '@rateforge/types';
 
 // Mock config so we do not depend on real env
 jest.mock('@rateforge/config', () => ({
-  JWT_SECRET: 'test-secret'
+  JWT_SECRET: 'test-secret',
 }));
 
 // Mock jsonwebtoken to control token verification behaviour
@@ -17,16 +17,21 @@ const verifyMock = jest.fn();
 jest.mock('jsonwebtoken', () => ({
   __esModule: true,
   default: {
-    verify: (...args: any[]) => verifyMock(...args)
+    verify: (...args: any[]) => verifyMock(...args),
   },
-  verify: (...args: any[]) => verifyMock(...args)
+  verify: (...args: any[]) => verifyMock(...args),
 }));
 
 function createMockReq(headers: Record<string, string | undefined> = {}, ip = '127.0.0.1') {
   return {
     headers,
-    ip
-  } as { headers: Record<string, string | undefined>; ip: string; clientIdentity?: ClientIdentity };
+    ip,
+  } as {
+    headers: Record<string, string | undefined>;
+    ip: string;
+    clientIdentity?: ClientIdentity;
+    authToken?: Record<string, unknown>;
+  };
 }
 
 function createMockRes() {
@@ -34,7 +39,7 @@ function createMockRes() {
   const json = jest.fn().mockReturnThis();
   return {
     status,
-    json
+    json,
   };
 }
 
@@ -52,7 +57,7 @@ describe('auth middleware verifyToken', () => {
 
     verifyMock.mockReturnValueOnce({
       userId: 'user-123',
-      tier: 'pro'
+      tier: 'pro',
     });
 
     await verifyToken(req as any, res as any, next);
@@ -62,7 +67,7 @@ describe('auth middleware verifyToken', () => {
     expect(req.clientIdentity).toEqual({
       userId: 'user-123',
       ip: '127.0.0.1',
-      tier: 'pro'
+      tier: 'pro',
     });
   });
 
@@ -121,3 +126,50 @@ describe('auth middleware verifyToken', () => {
   });
 });
 
+describe('auth middleware requireAdmin', () => {
+  it('allows requests with role=admin', () => {
+    const req = createMockReq();
+    req.authToken = { userId: 'admin-1', role: 'admin' };
+    const res = createMockRes();
+    const next = createNext();
+
+    requireAdmin(req as any, res as any, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('allows requests with roles including admin', () => {
+    const req = createMockReq();
+    req.authToken = { userId: 'admin-2', roles: ['viewer', 'admin'] };
+    const res = createMockRes();
+    const next = createNext();
+
+    requireAdmin(req as any, res as any, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 403 when the token lacks admin privileges', () => {
+    const req = createMockReq();
+    req.authToken = { userId: 'user-1', role: 'user' };
+    const res = createMockRes();
+    const next = createNext();
+
+    requireAdmin(req as any, res as any, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('returns 403 when authToken is missing', () => {
+    const req = createMockReq();
+    const res = createMockRes();
+    const next = createNext();
+
+    requireAdmin(req as any, res as any, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+});

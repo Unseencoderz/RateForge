@@ -3,7 +3,7 @@
  *
  * Strategy
  * ─────────
- * • `fs.writeFileSync`, `fs.renameSync`, and `IORedis.publish` are all mocked
+ * • `fs.writeFileSync`, `fs.renameSync`, and rules-store persistence are mocked
  *   so tests are hermetic — no disk I/O, no Redis connection.
  * • `getRulesPath` is mocked to return a stable fake path.
  * • Each describe group is isolated with fresh mocks via beforeEach.
@@ -30,17 +30,7 @@ jest.mock('fs');
 const writeFileSyncMock = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
 const renameSyncMock = jest.spyOn(fs, 'renameSync').mockImplementation(() => {});
 
-// ── Mock IORedis (publisher) ──────────────────────────────────────────────────
-
-const publishMock = jest.fn<() => Promise<number>>().mockResolvedValue(1);
-
-jest.mock('ioredis', () => {
-  const MockIORedis = jest.fn().mockImplementation(() => ({
-    publish: publishMock,
-  }));
-  (MockIORedis as any).default = MockIORedis;
-  return { __esModule: true, default: MockIORedis };
-});
+const persistRulesToStoreMock = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
 // ── Mock config ───────────────────────────────────────────────────────────────
 
@@ -54,10 +44,8 @@ jest.mock('../config/rules-loader', () => ({
   getRulesPath: () => FAKE_RULES_PATH,
 }));
 
-// ── Mock rules-watcher (only need the channel constant) ───────────────────────
-
-jest.mock('../config/rules-watcher', () => ({
-  RULES_UPDATE_CHANNEL: 'rateforge:rules:update',
+jest.mock('../config/rules-store', () => ({
+  persistRulesToStore: (...args: any[]) => (persistRulesToStoreMock as any)(...args),
 }));
 
 // ── Mock getRules (not used by POST but imported in module) ───────────────────
@@ -112,7 +100,7 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
     writeFileSyncMock.mockImplementation(() => {});
     renameSyncMock.mockImplementation(() => {});
-    publishMock.mockResolvedValue(1);
+    persistRulesToStoreMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -235,22 +223,22 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
     });
   });
 
-  // ── Redis publish ──────────────────────────────────────────────────────────
+  // ── Shared rules store persistence ─────────────────────────────────────────
 
-  describe('Redis publish', () => {
-    it('publishes to rateforge:rules:update after writing', async () => {
+  describe('rules store persistence', () => {
+    it('persists the validated rules after writing', async () => {
       await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
-      expect(publishMock).toHaveBeenCalledWith('rateforge:rules:update', 'update');
+      expect(persistRulesToStoreMock).toHaveBeenCalledWith([VALID_RULE]);
     });
 
-    it('publishes exactly once per request', async () => {
+    it('persists exactly once per request', async () => {
       await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
-      expect(publishMock).toHaveBeenCalledTimes(1);
+      expect(persistRulesToStoreMock).toHaveBeenCalledTimes(1);
     });
 
-    it('publishes after the file write (correct ordering)', async () => {
+    it('persists after the file write (correct ordering)', async () => {
       const callOrder: string[] = [];
       writeFileSyncMock.mockImplementation(() => {
         callOrder.push('write');
@@ -258,14 +246,13 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
       renameSyncMock.mockImplementation(() => {
         callOrder.push('rename');
       });
-      publishMock.mockImplementation(async () => {
-        callOrder.push('publish');
-        return 1;
+      persistRulesToStoreMock.mockImplementation(async () => {
+        callOrder.push('persist');
       });
 
       await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
-      expect(callOrder).toEqual(['write', 'rename', 'publish']);
+      expect(callOrder).toEqual(['write', 'rename', 'persist']);
     });
   });
 
@@ -340,10 +327,10 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
       expect(writeFileSyncMock).not.toHaveBeenCalled();
     });
 
-    it('does NOT publish to Redis on validation failure', async () => {
+    it('does NOT persist rules on validation failure', async () => {
       await request(buildHandlerApp()).post('/rules').send({ rules: [] });
 
-      expect(publishMock).not.toHaveBeenCalled();
+      expect(persistRulesToStoreMock).not.toHaveBeenCalled();
     });
   });
 
@@ -396,22 +383,22 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
       expect(res.status).toBe(500);
     });
 
-    it('does NOT publish to Redis when disk write fails', async () => {
+    it('does NOT persist rules when disk write fails', async () => {
       writeFileSyncMock.mockImplementationOnce(() => {
         throw new Error('disk full');
       });
 
       await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
-      expect(publishMock).not.toHaveBeenCalled();
+      expect(persistRulesToStoreMock).not.toHaveBeenCalled();
     });
   });
 
-  // ── Redis errors (500) ────────────────────────────────────────────────────
+  // ── Shared rules store errors (500) ───────────────────────────────────────
 
-  describe('Redis publish errors', () => {
-    it('returns HTTP 500 when publish() rejects', async () => {
-      publishMock.mockRejectedValueOnce(new Error('Redis connection refused'));
+  describe('rules store persistence errors', () => {
+    it('returns HTTP 500 when persistRulesToStore() rejects', async () => {
+      persistRulesToStoreMock.mockRejectedValueOnce(new Error('Redis connection refused'));
 
       const res = await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
@@ -420,7 +407,7 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
     });
 
     it('includes the Redis error in the response message', async () => {
-      publishMock.mockRejectedValueOnce(new Error('Redis connection refused'));
+      persistRulesToStoreMock.mockRejectedValueOnce(new Error('Redis connection refused'));
 
       const res = await request(buildHandlerApp()).post('/rules').send(VALID_BODY);
 
@@ -437,10 +424,10 @@ describe('POST /api/v1/admin/rules (P2-M5-T2)', () => {
       expect(res.status).toBe(201);
     });
 
-    it('publishes to Redis when invoked via router', async () => {
+    it('persists rules when invoked via router', async () => {
       await request(buildRouterApp()).post('/api/v1/admin/rules').send(VALID_BODY);
 
-      expect(publishMock).toHaveBeenCalledWith('rateforge:rules:update', 'update');
+      expect(persistRulesToStoreMock).toHaveBeenCalledWith([VALID_RULE]);
     });
   });
 });

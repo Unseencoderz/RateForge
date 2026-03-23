@@ -1,138 +1,131 @@
+import { JWT_SECRET, RATE_LIMITER_URL } from '@rateforge/config';
+
+import { createInternalServiceHeaders } from '../utils/internal-service-auth';
+
 import type { RateLimitRequest, RateLimitResult, RuleConfig } from '@rateforge/types';
 
-const RATE_LIMITER_URL = process.env['RATE_LIMITER_URL'] ?? 'http://localhost:3000';
+const DEFAULT_TIMEOUT_MS = 3_000;
+const INTERNAL_SERVICE_NAME = 'api-gateway';
 
-const DEFAULT_TIMEOUT = 3000;
+interface JsonRequestOptions<T> {
+  body?: string;
+  fallback?: T;
+  headers?: Record<string, string>;
+  method?: 'GET' | 'POST' | 'PUT';
+  timeoutMs?: number;
+}
 
-/**
- * Generic HTTP helper with timeout + safe JSON parsing
- */
-async function httpRequest<T>(path: string, options: RequestInit = {}, fallback: T): Promise<T> {
+function buildInternalHeaders(
+  method: string,
+  path: string,
+  body?: string,
+  headers: Record<string, string> = {},
+): Record<string, string> {
+  void body;
+  return {
+    ...headers,
+    ...createInternalServiceHeaders({
+      service: INTERNAL_SERVICE_NAME,
+      method,
+      path,
+      secret: JWT_SECRET,
+    }),
+  };
+}
+
+async function requestJson<T>(path: string, options: JsonRequestOptions<T> = {}): Promise<T> {
+  const method = options.method ?? 'GET';
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   try {
     const response = await fetch(`${RATE_LIMITER_URL}${path}`, {
-      ...options,
-      headers: {
+      method,
+      body: options.body,
+      headers: buildInternalHeaders(method, path, options.body, {
         'Content-Type': 'application/json',
-        ...(options.headers || {}),
-      },
+        ...(options.headers ?? {}),
+      }),
       signal: controller.signal,
     });
 
-    if (!response.ok) return fallback;
+    if (!response.ok && response.status !== 429) {
+      if (options.fallback !== undefined) {
+        return options.fallback;
+      }
 
-    try {
-      return (await response.json()) as T;
-    } catch {
-      return fallback;
+      const errorText = await response.text().catch(() => '');
+      throw new Error(
+        `Rate limiter request failed (${response.status} ${response.statusText})${errorText ? `: ${errorText}` : ''}`,
+      );
     }
-  } catch {
-    return fallback;
+
+    return (await response.json()) as T;
+  } catch (err) {
+    if (options.fallback !== undefined) {
+      return options.fallback;
+    }
+
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
 }
 
-/**
- * Rate limit check (fail-open)
- */
 export async function checkLimit(req: RateLimitRequest): Promise<RateLimitResult> {
-  const fallback: RateLimitResult = {
-    allowed: true,
-    limit: Infinity,
-    remaining: Infinity,
-    resetAt: Date.now() + 60_000,
-    reason: 'FALLBACK',
-  };
+  // Completely remove the 'fallback' object definition
 
-  return httpRequest<RateLimitResult>(
-    '/api/v1/check',
-    {
-      method: 'POST',
-      body: JSON.stringify(req),
-    },
-    fallback,
-  );
+  return requestJson<RateLimitResult>('/api/v1/check', {
+    method: 'POST',
+    body: JSON.stringify(req),
+    // REMOVE the fallback property here so the error throws!
+  });
 }
 
-/**
- * Reset limit for a client
- */
 export async function resetLimit(clientId: string): Promise<number> {
-  const data = await httpRequest<{ data?: { deletedKeys?: number } }>(
-    `/api/v1/reset/${clientId}`,
-    { method: 'POST' },
-    { data: { deletedKeys: 0 } },
-  );
+  const data = await requestJson<{ data?: { deletedKeys?: number } }>(`/api/v1/reset/${clientId}`, {
+    method: 'POST',
+  });
 
   return typeof data?.data?.deletedKeys === 'number' ? data.data.deletedKeys : 0;
 }
 
-/**
- * Fetch rules
- */
 export async function getRules(): Promise<RuleConfig[]> {
-  const data = await httpRequest<{ data?: RuleConfig[] }>('/api/v1/rules', {}, { data: [] });
-
+  const data = await requestJson<{ data?: RuleConfig[] }>('/api/v1/rules');
   return data.data ?? [];
 }
 
-/**
- * No-op (in-process compatibility)
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function setRules(_rules: RuleConfig[]): void {
-  // no-op
-}
-
-/**
- * Blacklist / Whitelist APIs
- */
 export async function addToBlacklist(ip: string): Promise<void> {
-  await httpRequest(
-    '/api/v1/blacklist',
-    {
-      method: 'POST',
-      body: JSON.stringify({ ip }),
-    },
-    null,
-  );
+  await requestJson('/api/v1/blacklist', {
+    method: 'POST',
+    body: JSON.stringify({ ip }),
+  });
 }
 
 export async function addToWhitelist(ip: string): Promise<void> {
-  await httpRequest(
-    '/api/v1/whitelist',
-    {
-      method: 'POST',
-      body: JSON.stringify({ ip }),
-    },
-    null,
-  );
+  await requestJson('/api/v1/whitelist', {
+    method: 'POST',
+    body: JSON.stringify({ ip }),
+  });
 }
 
-/**
- * Check blacklist
- */
 export async function isBlacklisted(ip: string): Promise<boolean> {
-  const data = await httpRequest<{ blacklisted?: boolean }>(
+  const data = await requestJson<{ blacklisted?: boolean }>(
     `/api/v1/blacklist/check?ip=${encodeURIComponent(ip)}`,
-    {},
-    { blacklisted: false },
+    {
+      fallback: { blacklisted: false },
+    },
   );
 
   return data.blacklisted === true;
 }
 
-/**
- * Check whitelist
- */
 export async function isWhitelisted(ip: string): Promise<boolean> {
-  const data = await httpRequest<{ whitelisted?: boolean }>(
+  const data = await requestJson<{ whitelisted?: boolean }>(
     `/api/v1/whitelist/check?ip=${encodeURIComponent(ip)}`,
-    {},
-    { whitelisted: false },
+    {
+      fallback: { whitelisted: false },
+    },
   );
 
   return data.whitelisted === true;

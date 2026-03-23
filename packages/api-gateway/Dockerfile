@@ -12,6 +12,7 @@ COPY packages/api-gateway/package.json ./packages/api-gateway/
 COPY packages/config/package.json ./packages/config/
 COPY packages/types/package.json ./packages/types/
 
+
 # Install dependencies (ignoring scripts to avoid husky errors in Docker)
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
@@ -32,6 +33,8 @@ COPY --from=builder /prod/api-gateway/dist ./dist
 COPY --from=builder /prod/api-gateway/node_modules ./node_modules
 COPY --from=builder /prod/api-gateway/package.json ./package.json
 COPY --from=builder /app/packages/api-gateway/rules.json ./rules.json
+
+RUN chown -R node:node /app
 
 USER node
 EXPOSE 3000
