@@ -1,6 +1,7 @@
 import { AlgorithmType } from '@rateforge/types';
 
 import { checkLimit, isBlacklisted, isWhitelisted } from '../services/rate-limiter.client';
+import { getErrorMeta, getRequestLogger } from '../utils/logger';
 
 import type { RateLimitRequest, RateLimitResult } from '@rateforge/types';
 import type { Request, Response, NextFunction } from 'express';
@@ -116,7 +117,14 @@ export async function applyRateLimit(
 
     // Surface the error so the error-handler middleware can log / emit metrics.
     // We do NOT call next(err) because we still want the request to proceed.
-    console.error('[rate-limit] RateLimitService error (fail-open):', err);
+    getRequestLogger(req).error({
+      message: 'Rate limiter request failed and gateway failed open',
+      event: 'rate_limit.fail_open',
+      path: endpoint,
+      method: req.method,
+      clientId: rlRequest.clientId,
+      ...getErrorMeta(err),
+    });
   }
 
   next();

@@ -7,6 +7,7 @@ import { AlgorithmType } from '@rateforge/types';
 import IORedisMock from 'ioredis-mock';
 
 import { startRulesWatcher, RULES_UPDATE_CHANNEL } from './rules-watcher';
+import { logger } from '../utils/logger';
 
 import type { RuleConfig } from '@rateforge/types';
 
@@ -21,33 +22,38 @@ jest.mock('ioredis', () => {
   const MockIORedisClass = require('ioredis-mock');
   const MockIORedis = jest.fn().mockImplementation(() => {
     mockSubscriberInstance = new MockIORedisClass();
-    
+
     // Use arguments instead of typed rest params to avoid Babel SyntaxErrors during hoisting
-    mockSubscriberInstance.subscribe = function() { return MockIORedisClass.prototype.subscribe.apply(this, arguments); };
-    mockSubscriberInstance.unsubscribe = function() { return MockIORedisClass.prototype.unsubscribe.apply(this, arguments); };
-    mockSubscriberInstance.disconnect = function() { return MockIORedisClass.prototype.disconnect.apply(this, arguments); };
-    
+    mockSubscriberInstance.subscribe = function () {
+      return MockIORedisClass.prototype.subscribe.apply(this, arguments);
+    };
+    mockSubscriberInstance.unsubscribe = function () {
+      return MockIORedisClass.prototype.unsubscribe.apply(this, arguments);
+    };
+    mockSubscriberInstance.disconnect = function () {
+      return MockIORedisClass.prototype.disconnect.apply(this, arguments);
+    };
+
     return mockSubscriberInstance;
   });
-  
+
   MockIORedisClass.prototype.subscribe = jest.fn();
   MockIORedisClass.prototype.unsubscribe = jest.fn();
   MockIORedisClass.prototype.disconnect = jest.fn();
-  
+
   Object.assign(MockIORedis, { default: MockIORedis });
   return { __esModule: true, default: MockIORedis };
 });
 
 jest.mock('@rateforge/config', () => ({
-  REDIS_URL: 'redis://localhost:6379'
+  REDIS_URL: 'redis://localhost:6379',
 }));
 
 const loadRulesMock = jest.fn<() => RuleConfig[]>();
 jest.mock('./rules-loader', () => ({
   loadRules: (...args: any[]) => (loadRulesMock as any)(...args),
-  getRulesPath: () => '/fake/rules.json'
+  getRulesPath: () => '/fake/rules.json',
 }));
-
 
 const BASE_RULE: RuleConfig = {
   id: 'default',
@@ -55,13 +61,13 @@ const BASE_RULE: RuleConfig = {
   windowMs: 60_000,
   maxRequests: 60,
   algorithm: AlgorithmType.TOKEN_BUCKET,
-  enabled: true
+  enabled: true,
 };
 
 const UPDATED_RULE: RuleConfig = {
   ...BASE_RULE,
   id: 'updated',
-  maxRequests: 120
+  maxRequests: 120,
 };
 
 function simulateMessage(channel: string, message: string): void {
@@ -71,9 +77,9 @@ function simulateMessage(channel: string, message: string): void {
 describe('startRulesWatcher (P2-M4-T2)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(console, 'info').mockImplementation(() => { });
-    jest.spyOn(console, 'warn').mockImplementation(() => { });
-    jest.spyOn(console, 'error').mockImplementation(() => { });
+    jest.spyOn(console, 'info').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -89,13 +95,10 @@ describe('startRulesWatcher (P2-M4-T2)', () => {
       const subscribeSpy = jest.spyOn(IORedisMock.prototype as any, 'subscribe');
 
       const handle = startRulesWatcher({
-        onReloaded: jest.fn()
+        onReloaded: jest.fn(),
       });
 
-      expect(subscribeSpy).toHaveBeenCalledWith(
-        RULES_UPDATE_CHANNEL,
-        expect.any(Function)
-      );
+      expect(subscribeSpy).toHaveBeenCalledWith(RULES_UPDATE_CHANNEL, expect.any(Function));
 
       await handle.stop();
     });
@@ -136,7 +139,7 @@ describe('startRulesWatcher (P2-M4-T2)', () => {
       const handle = startRulesWatcher({
         onReloaded: (rules) => {
           activatedRules = rules;
-        }
+        },
       });
 
       simulateMessage(RULES_UPDATE_CHANNEL, 'update');
@@ -154,7 +157,7 @@ describe('startRulesWatcher (P2-M4-T2)', () => {
 
       const handle = startRulesWatcher({
         rulesPath: customPath,
-        onReloaded: jest.fn()
+        onReloaded: jest.fn(),
       });
 
       simulateMessage(RULES_UPDATE_CHANNEL, 'reload');
@@ -205,7 +208,9 @@ describe('startRulesWatcher (P2-M4-T2)', () => {
   describe('error handling during hot reload', () => {
     it('calls onError instead of crashing when loadRules throws', async () => {
       const reloadError = new Error('Invalid rule config');
-      loadRulesMock.mockImplementationOnce(() => { throw reloadError; });
+      loadRulesMock.mockImplementationOnce(() => {
+        throw reloadError;
+      });
       const onError = jest.fn();
       const onReloaded = jest.fn();
 
@@ -221,11 +226,13 @@ describe('startRulesWatcher (P2-M4-T2)', () => {
 
     it('does NOT call process.exit on hot-reload failure', async () => {
       const exitSpy = jest.spyOn(process, 'exit');
-      loadRulesMock.mockImplementationOnce(() => { throw new Error('bad schema'); });
+      loadRulesMock.mockImplementationOnce(() => {
+        throw new Error('bad schema');
+      });
 
       const handle = startRulesWatcher({
         onReloaded: jest.fn(),
-        onError: jest.fn()
+        onError: jest.fn(),
       });
 
       simulateMessage(RULES_UPDATE_CHANNEL, 'bad');
@@ -237,7 +244,9 @@ describe('startRulesWatcher (P2-M4-T2)', () => {
 
     it('continues to reload successfully after a prior reload error', async () => {
       loadRulesMock
-        .mockImplementationOnce(() => { throw new Error('bad config'); })
+        .mockImplementationOnce(() => {
+          throw new Error('bad config');
+        })
         .mockReturnValueOnce([UPDATED_RULE]);
 
       const onReloaded = jest.fn();
@@ -255,15 +264,17 @@ describe('startRulesWatcher (P2-M4-T2)', () => {
       await handle.stop();
     });
 
-    it('uses the default console.error handler when onError is not provided', async () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
-      loadRulesMock.mockImplementationOnce(() => { throw new Error('oops'); });
+    it('uses the default structured logger handler when onError is not provided', async () => {
+      const loggerSpy = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+      loadRulesMock.mockImplementationOnce(() => {
+        throw new Error('oops');
+      });
 
       const handle = startRulesWatcher({ onReloaded: jest.fn() });
 
       simulateMessage(RULES_UPDATE_CHANNEL, 'bad');
 
-      expect(consoleSpy).toHaveBeenCalled();
+      expect(loggerSpy).toHaveBeenCalled();
 
       await handle.stop();
     });

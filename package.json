@@ -15,11 +15,14 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
+    "loadtest:burst": "k6 run load-tests/burst.js",
+    "loadtest:sustained": "k6 run load-tests/sustained.js",
+    "loadtest:spike": "k6 run load-tests/spike.js",
     "prepare": "husky",
     "lint:staged": "lint-staged"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
+    "{packages,load-tests}/**/*.{ts,tsx,js,jsx}": [
       "eslint --max-warnings=0 --fix",
       "prettier --write"
     ],

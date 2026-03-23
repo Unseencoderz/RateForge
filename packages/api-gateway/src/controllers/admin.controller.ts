@@ -19,6 +19,7 @@ import {
   getRules,
   resetLimit,
 } from '../services/rate-limiter.client';
+import { getErrorMeta, getRequestLogger } from '../utils/logger';
 
 import type {
   ApiResponse,
@@ -189,9 +190,12 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
     fs.writeFileSync(tmpPath, json, 'utf-8');
     fs.renameSync(tmpPath, rulesPath);
 
-    console.info(
-      `[admin] rules.json updated (${payload.rules.length} rule(s)) → ${path.basename(rulesPath)}`,
-    );
+    getRequestLogger(req).info({
+      message: 'Admin rules persisted to disk',
+      event: 'admin.rules.persisted',
+      ruleCount: payload.rules.length,
+      fileName: path.basename(rulesPath),
+    });
 
     // ── 4. Persist to the shared Redis rules store ──────────────────────────
     await persistRulesToStore(payload.rules);
@@ -205,7 +209,11 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
-    console.error('[admin] Failed to persist rules:', message);
+    getRequestLogger(req).error({
+      message: 'Admin rules persistence failed',
+      event: 'admin.rules.persist_failed',
+      ...getErrorMeta(err),
+    });
 
     const body: ApiResponse<never> = {
       success: false,
@@ -255,7 +263,12 @@ export async function postAdminResetClient(req: Request, res: Response): Promise
     res.status(HTTP_STATUS_OK).json(body);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[admin] resetLimit failed for "${clientId}": ${message}`);
+    getRequestLogger(req).error({
+      message: 'Admin reset client failed',
+      event: 'admin.client_reset.failed',
+      clientId,
+      ...getErrorMeta(err),
+    });
 
     const body: ApiResponse<never> = {
       success: false,

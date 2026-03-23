@@ -2,6 +2,7 @@ import { AlgorithmType, REDIS_KEY_PREFIX } from '@rateforge/types';
 
 import { getAlgorithm } from '../algorithms/factory';
 import { createRedisClient } from '../redis/client';
+import { getRequestLogger } from '../utils/logger';
 
 import type { RateLimiterAlgorithm } from '../algorithms/interface';
 import type { RateLimitRequest, RateLimitResult, RuleConfig } from '@rateforge/types';
@@ -84,9 +85,12 @@ export async function resetLimit(clientId: string): Promise<number> {
   // This is safe because the cache contains stateless TokenBucket instances.
   algorithmCache.clear();
 
-  console.info(
-    `[rate-limit-service] resetLimit: deleted ${totalDeleted} key(s) for client "${clientId}"`,
-  );
+  getRequestLogger().info({
+    message: 'Rate limit keys reset for client',
+    event: 'rate_limit.reset_succeeded',
+    clientId,
+    deletedKeys: totalDeleted,
+  });
 
   return totalDeleted;
 }

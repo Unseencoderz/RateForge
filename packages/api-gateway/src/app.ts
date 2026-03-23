@@ -6,11 +6,15 @@ import helmet from 'helmet';
 import { loadRules } from './config/rules-loader';
 import { seedRulesStore } from './config/rules-store';
 import { adminRouter } from './controllers/admin.controller';
+import { metricsRegistry } from './metrics/registry';
 import { errorHandler } from './middleware/error-handler';
 import { applyRateLimit } from './middleware/rate-limit';
 import { sendRateLimitResponse } from './middleware/rate-limit-response';
 import { attachRequestId } from './middleware/request-id';
+import { logRequests } from './middleware/request-logger';
 import { healthCheck } from './services/health-check';
+import { logger } from './utils/logger';
+import { bindRequestContext } from './utils/request-context';
 
 import type { Express, Request, Response } from 'express';
 
@@ -27,11 +31,27 @@ app.use(express.json());
 // Attaches a UUID v4 to `req.id` and sets `X-Request-ID` response header on
 // every request. Downstream middleware and logs use this as the correlation ID.
 app.use(attachRequestId);
+app.use((req, _res, next) => {
+  bindRequestContext(
+    {
+      requestId: req.id,
+      traceId: req.traceId,
+    },
+    next,
+  );
+});
+app.use(logRequests);
 
 // ── Health / readiness endpoints (P2-M1-T4) ───────────────────────────────────
 //
 // /health  → Kubernetes liveness probe (always 200 if process is alive)
 // /ready   → Kubernetes readiness probe (checks Redis + rate-limiter connectivity)
+app.get('/metrics', async (_req: Request, res: Response): Promise<void> => {
+  res.setHeader('Content-Type', metricsRegistry.contentType);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(await metricsRegistry.metrics());
+});
+
 app.get('/health', (_req: Request, res: Response) => {
   res.status(HTTP_STATUS_OK).json({ status: 'ok' });
 });
@@ -82,7 +102,10 @@ app.use(errorHandler);
 export async function initApp(): Promise<void> {
   const rules = loadRules();
   const seedResult = await seedRulesStore(rules);
-  console.info(
-    `[app] rules store initialised (${seedResult}) with ${rules.length} rule(s) validated from disk`,
-  );
+  logger.info({
+    message: 'Rules store initialised from disk',
+    event: 'rules.store.initialised',
+    seedResult,
+    ruleCount: rules.length,
+  });
 }

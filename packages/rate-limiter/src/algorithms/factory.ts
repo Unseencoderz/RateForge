@@ -1,5 +1,7 @@
 import { AlgorithmType } from '@rateforge/types';
 
+import { logger } from '../utils/logger';
+
 import { FixedWindowCounter } from './fixed-window';
 import { FixedWindowRedis } from './fixed-window-redis';
 import { SlidingWindowLog } from './sliding-window';
@@ -51,10 +53,13 @@ export function getAlgorithm(rule: RuleConfig, redis?: Redis): RateLimiterAlgori
       });
 
     case AlgorithmType.LEAKY_BUCKET:
-      console.warn(
-        `[algorithm-factory] leaky_bucket is not yet implemented for rule "${rule.id}". ` +
-          `Falling back to token_bucket.`,
-      );
+      logger.warn({
+        message: 'Leaky bucket is not implemented; falling back to token bucket',
+        event: 'algorithm_factory.fallback',
+        ruleId: rule.id,
+        requestedAlgorithm: rule.algorithm,
+        fallbackAlgorithm: AlgorithmType.TOKEN_BUCKET,
+      });
       if (redis) {
         return new TokenBucketRedis(redis, rule.maxRequests, rule.windowMs, rule.burstCapacity);
       }

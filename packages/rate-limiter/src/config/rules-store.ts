@@ -3,8 +3,10 @@ import { AlgorithmType, RULES_STORE_KEY, RULES_UPDATE_CHANNEL } from '@rateforge
 import IORedis from 'ioredis';
 import { z } from 'zod';
 
+import { markRedisError, markRedisHealthy } from '../metrics/registry';
 import { createRedisClient } from '../redis/client';
 import { setRules } from '../services/rate-limit.service';
+import { getErrorMeta, logger } from '../utils/logger';
 
 import type { RuleConfig } from '@rateforge/types';
 
@@ -31,26 +33,44 @@ function parseStoredRules(raw: string): RuleConfig[] {
 }
 
 export async function loadRulesFromStore(): Promise<RuleConfig[] | null> {
-  const raw = await createRedisClient().get(RULES_STORE_KEY);
-  if (!raw) {
-    return null;
-  }
+  try {
+    const raw = await createRedisClient().get(RULES_STORE_KEY);
+    markRedisHealthy('rules_store_load');
 
-  return parseStoredRules(raw);
+    if (!raw) {
+      return null;
+    }
+
+    return parseStoredRules(raw);
+  } catch (err) {
+    markRedisError('rules_store_load');
+    throw err;
+  }
 }
 
 export async function initialiseRulesFromStore(): Promise<void> {
   try {
     const rules = await loadRulesFromStore();
     if (!rules) {
-      console.warn('[rate-limiter] No shared rules found in Redis; using in-process defaults');
+      logger.warn({
+        message: 'No shared rules found in Redis; using in-process defaults',
+        event: 'rules_store.empty',
+      });
       return;
     }
 
     setRules(rules);
-    console.info(`[rate-limiter] Loaded ${rules.length} rule(s) from the shared Redis store`);
+    logger.info({
+      message: 'Shared rules loaded from Redis store',
+      event: 'rules_store.loaded',
+      ruleCount: rules.length,
+    });
   } catch (err) {
-    console.error('[rate-limiter] Failed to load rules from Redis store:', err);
+    logger.error({
+      message: 'Failed to load shared rules from Redis store',
+      event: 'rules_store.load_failed',
+      ...getErrorMeta(err),
+    });
   }
 }
 
@@ -68,11 +88,21 @@ export function startRulesSubscriber(): RulesSubscriberHandle {
 
   subscriber.subscribe(RULES_UPDATE_CHANNEL, (err) => {
     if (err) {
-      console.error('[rate-limiter] Failed to subscribe for rule updates:', err);
+      markRedisError('rules_subscriber');
+      logger.error({
+        message: 'Failed to subscribe for rule updates',
+        event: 'rules_subscriber.subscribe_failed',
+        ...getErrorMeta(err),
+      });
       return;
     }
 
-    console.info(`[rate-limiter] Subscribed to "${RULES_UPDATE_CHANNEL}"`);
+    markRedisHealthy('rules_subscriber');
+    logger.info({
+      message: 'Subscribed to shared rules update channel',
+      event: 'rules_subscriber.subscribed',
+      channel: RULES_UPDATE_CHANNEL,
+    });
   });
 
   subscriber.on('message', async (channel) => {
@@ -83,19 +113,39 @@ export function startRulesSubscriber(): RulesSubscriberHandle {
     try {
       const rules = await loadRulesFromStore();
       if (!rules) {
-        console.warn('[rate-limiter] Rule update received but Redis store was empty');
+        logger.warn({
+          message: 'Rule update received but Redis store was empty',
+          event: 'rules_subscriber.empty_update',
+          channel,
+        });
         return;
       }
 
       setRules(rules);
-      console.info(`[rate-limiter] Applied ${rules.length} rule(s) from the shared Redis store`);
+      logger.info({
+        message: 'Applied rules from shared Redis store',
+        event: 'rules_subscriber.applied',
+        channel,
+        ruleCount: rules.length,
+      });
     } catch (err) {
-      console.error('[rate-limiter] Failed to apply shared rule update:', err);
+      markRedisError('rules_subscriber');
+      logger.error({
+        message: 'Failed to apply shared rule update',
+        event: 'rules_subscriber.apply_failed',
+        channel,
+        ...getErrorMeta(err),
+      });
     }
   });
 
   subscriber.on('error', (err: Error) => {
-    console.error('[rate-limiter] Rules subscriber connection error:', err.message);
+    markRedisError('rules_subscriber');
+    logger.error({
+      message: 'Rules subscriber connection error',
+      event: 'rules_subscriber.connection_error',
+      ...getErrorMeta(err),
+    });
   });
 
   return {

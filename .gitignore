@@ -6,3 +6,6 @@ node_modules
 dist
 coverage
 *.tsbuildinfo
+
+# Generated load-test exports
+load-tests/results/*.json

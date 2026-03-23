@@ -5,12 +5,12 @@ module.exports = {
     project: ['./tsconfig.base.json'],
     tsconfigRootDir: __dirname,
     sourceType: 'module',
-    ecmaVersion: 2020
+    ecmaVersion: 2020,
   },
   env: {
     es2020: true,
     node: true,
-    jest: true
+    jest: true,
   },
   plugins: ['@typescript-eslint', 'import'],
   extends: [
@@ -18,7 +18,7 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'plugin:import/recommended',
     'plugin:import/typescript',
-    'prettier'
+    'prettier',
   ],
   rules: {
     '@typescript-eslint/no-unused-vars': [
@@ -26,28 +26,35 @@ module.exports = {
       {
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_'
-      }
+        caughtErrorsIgnorePattern: '^_',
+      },
     ],
     'import/order': [
       'error',
       {
-        groups: [
-          'builtin',
-          'external',
-          'internal',
-          'parent',
-          'sibling',
-          'index',
-          'object',
-          'type'
-        ],
+        groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index', 'object', 'type'],
         'newlines-between': 'always',
-        alphabetize: { order: 'asc', caseInsensitive: true }
-      }
-    ]
+        alphabetize: { order: 'asc', caseInsensitive: true },
+      },
+    ],
   },
   overrides: [
+    {
+      files: ['load-tests/**/*.js'],
+      globals: {
+        __ENV: 'readonly',
+      },
+      rules: {
+        'import/no-unresolved': 'off',
+        'no-undef': 'off',
+      },
+    },
+    {
+      files: ['**/vite.config.ts'],
+      rules: {
+        'import/no-unresolved': 'off',
+      },
+    },
     {
       files: ['**/*.test.ts', '**/*.test.tsx', '**/*.integration.test.ts'],
       rules: {
@@ -55,9 +62,9 @@ module.exports = {
         '@typescript-eslint/no-var-requires': 'off',
         'prefer-rest-params': 'off',
         // Keep prod code strict; tests can prioritize clarity over import grouping.
-        'import/order': 'off'
-      }
-    }
+        'import/order': 'off',
+      },
+    },
   ],
-  ignorePatterns: ['dist/', 'node_modules/', '**/vite.config.ts', '.github/']
+  ignorePatterns: ['dist/', 'node_modules/', '.github/', '.eslintrc.js', '*.config.js'],
 };

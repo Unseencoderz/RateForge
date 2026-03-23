@@ -1,6 +1,7 @@
 import { JWT_SECRET, RATE_LIMITER_URL } from '@rateforge/config';
 
 import { createInternalServiceHeaders } from '../utils/internal-service-auth';
+import { getRequestContext } from '../utils/request-context';
 
 import type { RateLimitRequest, RateLimitResult, RuleConfig } from '@rateforge/types';
 
@@ -21,9 +22,13 @@ function buildInternalHeaders(
   body?: string,
   headers: Record<string, string> = {},
 ): Record<string, string> {
+  const requestContext = getRequestContext();
+
   void body;
   return {
     ...headers,
+    ...(requestContext?.requestId ? { 'X-Request-ID': requestContext.requestId } : {}),
+    ...(requestContext?.traceId ? { 'X-Trace-ID': requestContext.traceId } : {}),
     ...createInternalServiceHeaders({
       service: INTERNAL_SERVICE_NAME,
       method,
@@ -73,12 +78,9 @@ async function requestJson<T>(path: string, options: JsonRequestOptions<T> = {})
 }
 
 export async function checkLimit(req: RateLimitRequest): Promise<RateLimitResult> {
-  // Completely remove the 'fallback' object definition
-
   return requestJson<RateLimitResult>('/api/v1/check', {
     method: 'POST',
     body: JSON.stringify(req),
-    // REMOVE the fallback property here so the error throws!
   });
 }
 

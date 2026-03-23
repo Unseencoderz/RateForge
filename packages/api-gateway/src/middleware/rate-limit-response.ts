@@ -1,9 +1,8 @@
-import {
-  HTTP_STATUS_TOO_MANY_REQUESTS
-} from '@rateforge/types';
+import { HTTP_STATUS_TOO_MANY_REQUESTS } from '@rateforge/types';
+
+import { getRequestLogger } from '../utils/logger';
 
 import type { Request, Response, NextFunction } from 'express';
-
 
 /**
  * P2-M3-T2 · Rate limit response handler middleware.
@@ -28,21 +27,19 @@ import type { Request, Response, NextFunction } from 'express';
  *  - X-RateLimit-Reset follows the GitHub convention of UTC epoch *seconds*
  *    (not milliseconds) so that standard HTTP clients can parse it directly.
  */
-export function sendRateLimitResponse(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
+export function sendRateLimitResponse(req: Request, res: Response, next: NextFunction): void {
   const result = req.rateLimitResult;
 
   // Guard: if applyRateLimit did not run (pipeline misconfiguration) allow
   // the request through rather than crashing.  Log a warning so the
   // misconfiguration is visible in observability tooling.
   if (!result) {
-    console.warn(
-      '[rate-limit-response] req.rateLimitResult is undefined. ' +
-      'Ensure applyRateLimit runs before sendRateLimitResponse.'
-    );
+    getRequestLogger(req).warn({
+      message: 'Rate limit response middleware ran without a result',
+      event: 'rate_limit.result_missing',
+      path: req.originalUrl,
+      method: req.method,
+    });
     next();
     return;
   }
@@ -83,16 +80,17 @@ export function sendRateLimitResponse(
       error: {
         code: 'FORBIDDEN',
         message: 'Your IP address has been blocked.',
-      }
+      },
     });
     return;
   }
 
   //
   // RFC 7231 §7.1.3: Retry-After value is a delay in seconds (integer).
-  const retryAfterSeconds = result.retryAfterMs !== undefined
-    ? Math.ceil(result.retryAfterMs / 1_000)
-    : Math.max(0, resetSeconds - Math.ceil(Date.now() / 1_000));
+  const retryAfterSeconds =
+    result.retryAfterMs !== undefined
+      ? Math.ceil(result.retryAfterMs / 1_000)
+      : Math.max(0, resetSeconds - Math.ceil(Date.now() / 1_000));
 
   res.setHeader('Retry-After', retryAfterSeconds);
 
@@ -107,9 +105,9 @@ export function sendRateLimitResponse(
         remaining: result.remaining,
         resetAt: result.resetAt,
         ruleId: result.ruleId ?? null,
-        reason: result.reason ?? 'RATE_LIMIT_EXCEEDED'
-      }
-    }
+        reason: result.reason ?? 'RATE_LIMIT_EXCEEDED',
+      },
+    },
   });
   // Do NOT call next() — the response has been sent.
 }

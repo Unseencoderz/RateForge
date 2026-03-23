@@ -2,6 +2,8 @@ import { REDIS_URL } from '@rateforge/config';
 import { RULES_UPDATE_CHANNEL } from '@rateforge/types';
 import IORedis from 'ioredis';
 
+import { getErrorMeta, logger } from '../utils/logger';
+
 import { loadRules } from './rules-loader';
 
 import type { RuleConfig } from '@rateforge/types';
@@ -75,10 +77,11 @@ export function startRulesWatcher(options: RulesWatcherOptions): RulesWatcherHan
   const { rulesPath, onReloaded, onError } = options;
 
   const defaultOnError: OnReloadError = (err) => {
-    console.error(
-      '[rules-watcher] Hot-reload failed — keeping existing rules active.\n',
-      err instanceof Error ? err.message : String(err),
-    );
+    logger.error({
+      message: 'Rules hot-reload failed and existing rules were kept active',
+      event: 'rules_watcher.reload_failed',
+      ...getErrorMeta(err),
+    });
   };
 
   const handleError = onError ?? defaultOnError;
@@ -94,9 +97,12 @@ export function startRulesWatcher(options: RulesWatcherOptions): RulesWatcherHan
     // disable hot-reload. The gateway keeps running with stale rules.
     retryStrategy(times: number) {
       const delay = Math.min(times * 300, 10_000);
-      console.warn(
-        `[rules-watcher] Redis subscriber reconnect attempt ${times}, ` + `retrying in ${delay}ms…`,
-      );
+      logger.warn({
+        message: 'Rules watcher subscriber reconnect scheduled',
+        event: 'rules_watcher.reconnect_scheduled',
+        attempt: times,
+        delayMs: delay,
+      });
       return delay;
     },
   });
@@ -112,10 +118,12 @@ export function startRulesWatcher(options: RulesWatcherOptions): RulesWatcherHan
       );
       return;
     }
-    console.info(
-      `[rules-watcher] Subscribed to "${RULES_UPDATE_CHANNEL}" ` +
-        `(active subscriptions: ${count}).`,
-    );
+    logger.info({
+      message: 'Rules watcher subscribed to Redis channel',
+      event: 'rules_watcher.subscribed',
+      channel: RULES_UPDATE_CHANNEL,
+      activeSubscriptions: count,
+    });
   });
 
   // ── Message handler ─────────────────────────────────────────────────────────
@@ -125,16 +133,22 @@ export function startRulesWatcher(options: RulesWatcherOptions): RulesWatcherHan
       return; // defensive: ignore unrelated channels
     }
 
-    console.info('[rules-watcher] Reload signal received — reloading rules…');
+    logger.info({
+      message: 'Rules watcher received reload signal',
+      event: 'rules_watcher.reload_received',
+      channel,
+    });
 
     try {
       // loadRules() calls process.exit on startup failures; during hot-reload
       // we catch any thrown errors (including the mocked process.exit in tests)
       // and route them through onError so the gateway stays up.
       const newRules = loadRules(rulesPath);
-      console.info(
-        `[rules-watcher] Rules reloaded successfully (${newRules.length} rule(s) active).`,
-      );
+      logger.info({
+        message: 'Rules reloaded successfully',
+        event: 'rules_watcher.reload_succeeded',
+        ruleCount: newRules.length,
+      });
       onReloaded(newRules);
     } catch (err) {
       handleError(err);
@@ -144,7 +158,11 @@ export function startRulesWatcher(options: RulesWatcherOptions): RulesWatcherHan
   // ── Error guard ─────────────────────────────────────────────────────────────
 
   subscriber.on('error', (err: Error) => {
-    console.error('[rules-watcher] Subscriber connection error:', err.message);
+    logger.error({
+      message: 'Rules watcher subscriber connection error',
+      event: 'rules_watcher.connection_error',
+      ...getErrorMeta(err),
+    });
     // Do not re-throw — IORedis will attempt to reconnect automatically.
   });
 
@@ -153,7 +171,10 @@ export function startRulesWatcher(options: RulesWatcherOptions): RulesWatcherHan
   const stop = async (): Promise<void> => {
     await subscriber.unsubscribe(RULES_UPDATE_CHANNEL);
     subscriber.disconnect();
-    console.info('[rules-watcher] Stopped.');
+    logger.info({
+      message: 'Rules watcher stopped',
+      event: 'rules_watcher.stopped',
+    });
   };
 
   return { stop, subscriber };

@@ -1,14 +1,24 @@
 import { PORT } from '@rateforge/config';
 
 import { app, initApp } from './app';
+import { logger, getErrorMeta } from './utils/logger';
 
 const port = PORT ?? 3000;
 
 app.listen(port, () => {
-  console.info(`[api-gateway] Server listening on port ${port}`);
+  logger.info({
+    message: 'API gateway server listening',
+    event: 'server.started',
+    port,
+  });
   // Initialise rules and start hot-reload watcher after server is up
   initApp().catch((err: unknown) => {
-    console.error('[api-gateway] Failed to initialise app:', err);
+    logger.error({
+      message: 'API gateway initialisation failed',
+      event: 'server.init_failed',
+      port,
+      ...getErrorMeta(err),
+    });
     process.exit(1);
   });
 });

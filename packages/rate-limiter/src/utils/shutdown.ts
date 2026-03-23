@@ -1,3 +1,5 @@
+import { getErrorMeta, logger } from './logger';
+
 import type { Server } from 'http';
 import type { Redis } from 'ioredis';
 
@@ -23,18 +25,32 @@ export function registerShutdown(
   cleanup?: () => Promise<void>,
 ): void {
   const shutdown = async (signal: string): Promise<void> => {
-    console.info(`[shutdown] Received ${signal} — starting graceful shutdown`);
+    logger.info({
+      message: 'Shutdown signal received',
+      event: 'shutdown.started',
+      signal,
+    });
 
     server.close(async () => {
-      console.info('[shutdown] HTTP server closed — cleaning up resources');
+      logger.info({
+        message: 'HTTP server closed; cleaning up resources',
+        event: 'shutdown.server_closed',
+      });
       try {
         if (cleanup) {
           await cleanup();
         }
         await redis.quit();
-        console.info('[shutdown] Redis disconnected — exiting');
+        logger.info({
+          message: 'Redis disconnected; exiting process',
+          event: 'shutdown.redis_closed',
+        });
       } catch (err) {
-        console.error('[shutdown] Redis quit error:', err);
+        logger.error({
+          message: 'Redis quit failed during shutdown',
+          event: 'shutdown.redis_close_failed',
+          ...getErrorMeta(err),
+        });
       } finally {
         process.exit(0);
       }
@@ -42,7 +58,11 @@ export function registerShutdown(
 
     // Force exit after 10 s if drain takes too long (e.g. stuck keep-alive connections)
     setTimeout(() => {
-      console.error('[shutdown] Drain timeout — forcing exit');
+      logger.error({
+        message: 'Shutdown drain timeout reached; forcing exit',
+        event: 'shutdown.timeout',
+        signal,
+      });
       process.exit(1);
     }, 10_000).unref();
   };

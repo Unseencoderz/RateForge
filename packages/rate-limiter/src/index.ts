@@ -12,10 +12,16 @@ import express, { type Express, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import { z } from 'zod';
 
+import { startAlertEvaluator } from './alerts/evaluator';
 import { initialiseRulesFromStore, startRulesSubscriber } from './config/rules-store';
+import { metricsRegistry, recordBlockedRequest } from './metrics/registry';
 import { requireInternalService } from './middleware/internal-auth';
+import { attachRequestId } from './middleware/request-id';
+import { logRequests } from './middleware/request-logger';
 import { createRedisClient, healthCheck } from './redis/client';
 import { checkLimit, setRules, getRules, resetLimit } from './services/rate-limit.service';
+import { getErrorMeta, getRequestLogger, logger } from './utils/logger';
+import { bindRequestContext } from './utils/request-context';
 import { registerShutdown } from './utils/shutdown';
 
 import type { ApiResponse, RateLimitRequest } from '@rateforge/types';
@@ -23,6 +29,17 @@ import type { ApiResponse, RateLimitRequest } from '@rateforge/types';
 const app: Express = express();
 app.use(helmet());
 app.use(express.json());
+app.use(attachRequestId);
+app.use((req, _res, next) => {
+  bindRequestContext(
+    {
+      requestId: req.id,
+      traceId: req.traceId,
+    },
+    next,
+  );
+});
+app.use(logRequests);
 
 const BLACKLIST_KEY = 'rateforge:blacklist';
 const WHITELIST_KEY = 'rateforge:whitelist';
@@ -42,6 +59,12 @@ const RateLimitRequestSchema = z.object({
 
 app.get('/health', (_req: Request, res: Response) => {
   res.status(HTTP_STATUS_OK).json({ status: 'ok' });
+});
+
+app.get('/metrics', async (_req: Request, res: Response): Promise<void> => {
+  res.setHeader('Content-Type', metricsRegistry.contentType);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(await metricsRegistry.metrics());
 });
 
 app.get('/ready', async (_req: Request, res: Response): Promise<void> => {
@@ -67,9 +90,19 @@ app.post('/api/v1/check', async (req: Request, res: Response): Promise<void> => 
 
   try {
     const result = await checkLimit(parsed.data as RateLimitRequest);
+
+    if (!result.allowed) {
+      recordBlockedRequest(req, result.reason, result.ruleId);
+    }
+
     res.status(HTTP_STATUS_OK).json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    getRequestLogger(req).error({
+      message: 'Rate limit check failed',
+      event: 'rate_limit.check_failed',
+      ...getErrorMeta(err),
+    });
     res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
       success: false,
       error: { code: 'INTERNAL_ERROR', message },
@@ -95,6 +128,12 @@ app.post('/api/v1/reset/:clientId', async (req: Request, res: Response): Promise
     res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
       success: false,
       error: { code: 'INTERNAL_ERROR', message },
+    });
+    getRequestLogger(req).error({
+      message: 'Rate limit reset failed',
+      event: 'rate_limit.reset_failed',
+      clientId,
+      ...getErrorMeta(err),
     });
   }
 });
@@ -135,6 +174,12 @@ app.post('/api/v1/blacklist', async (req: Request, res: Response): Promise<void>
     res.status(HTTP_STATUS_INTERNAL_SERVER_ERROR).json({
       success: false,
       error: { code: 'INTERNAL_ERROR', message },
+    });
+    getRequestLogger(req).error({
+      message: 'Blacklist update failed',
+      event: 'policy.blacklist_failed',
+      ip,
+      ...getErrorMeta(err),
     });
   }
 });
@@ -188,6 +233,12 @@ app.post('/api/v1/whitelist', async (req: Request, res: Response): Promise<void>
       success: false,
       error: { code: 'INTERNAL_ERROR', message },
     });
+    getRequestLogger(req).error({
+      message: 'Whitelist update failed',
+      event: 'policy.whitelist_failed',
+      ip,
+      ...getErrorMeta(err),
+    });
   }
 });
 
@@ -219,24 +270,37 @@ async function bootstrap(): Promise<void> {
   const redisOk = await healthCheck();
 
   if (!redisOk) {
-    console.warn('[rate-limiter] Redis not reachable on startup — proceeding in degraded mode');
+    logger.warn({
+      message: 'Redis not reachable on startup; proceeding in degraded mode',
+      event: 'redis.startup_unreachable',
+    });
   }
 
   await initialiseRulesFromStore();
   const rulesSubscriber = startRulesSubscriber();
+  const alertEvaluator = startAlertEvaluator();
 
   const port = PORT ?? 3001;
   const server = app.listen(port, () => {
-    console.info(`[rate-limiter] Service listening on port ${port}`);
+    logger.info({
+      message: 'Rate limiter server listening',
+      event: 'server.started',
+      port,
+    });
   });
 
   registerShutdown(redis, server, async () => {
+    await alertEvaluator.stop();
     await rulesSubscriber.stop();
   });
 }
 
 bootstrap().catch((err: unknown) => {
-  console.error('[rate-limiter] Failed to bootstrap service:', err);
+  logger.error({
+    message: 'Rate limiter bootstrap failed',
+    event: 'server.bootstrap_failed',
+    ...getErrorMeta(err),
+  });
   process.exit(1);
 });
 
