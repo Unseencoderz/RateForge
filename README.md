@@ -305,10 +305,6 @@ During this documentation pass on March 24, 2026, the last-known Railway URLs we
 
 Use the recording guide in [loom-demo-script.md](docs/loom-demo-script.md) when you capture the final walkthrough.
 
-## Resume Bullets
-
-Use the templates in [resume-bullets.md](docs/resume-bullets.md) after you replace the placeholders with measured load-test numbers and the current deployment URLs.
-
 ## ADRs
 
 Architecture decisions currently documented:
