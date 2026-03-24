@@ -23,7 +23,7 @@ app.set('trust proxy', true);
 
 // ── Core middleware ────────────────────────────────────────────────────────────
 app.use(helmet());
-app.use(cors());
+app.use(cors({ origin: process.env.FRONTEND_URL }));
 app.use(express.json());
 
 // ── Request ID middleware (P2-M1-T3) ──────────────────────────────────────────
