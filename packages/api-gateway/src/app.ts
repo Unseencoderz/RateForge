@@ -1,3 +1,4 @@
+import { FRONTEND_URL } from '@rateforge/config';
 import { HTTP_STATUS_OK } from '@rateforge/types';
 import cors from 'cors';
 import express from 'express';
@@ -23,7 +24,7 @@ app.set('trust proxy', true);
 
 // ── Core middleware ────────────────────────────────────────────────────────────
 app.use(helmet());
-app.use(cors({ origin: process.env.FRONTEND_URL }));
+app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
 
 // ── Request ID middleware (P2-M1-T3) ──────────────────────────────────────────

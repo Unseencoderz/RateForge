@@ -9,6 +9,7 @@ config({ path: resolve(__dirname, '../../../.env') });
 const envSchema = z.object({
   REDIS_URL: z.string().url(),
   RATE_LIMITER_URL: z.string().url().default('http://localhost:3001'),
+  FRONTEND_URL: z.string().url().default('http://localhost:4000'),
   ALERT_WEBHOOK_URL: z
     .string()
     .trim()
@@ -47,6 +48,7 @@ if (
 
 export const REDIS_URL = parsed.data.REDIS_URL;
 export const RATE_LIMITER_URL = parsed.data.RATE_LIMITER_URL;
+export const FRONTEND_URL = parsed.data.FRONTEND_URL;
 export const ALERT_WEBHOOK_URL = parsed.data.ALERT_WEBHOOK_URL;
 export const PORT = parsed.data.PORT;
 export const NODE_ENV = parsed.data.NODE_ENV;
