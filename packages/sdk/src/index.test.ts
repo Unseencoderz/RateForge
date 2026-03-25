@@ -7,7 +7,7 @@ describe('RateForgeClient', () => {
 
   beforeEach(() => {
     client = new RateForgeClient({
-      baseUrl: 'http://localhost:3001',
+      baseUrl: 'http://localhost:3000',
       apiKey: 'test-api-key',
       timeoutMs: 100,
     });
@@ -64,7 +64,7 @@ describe('RateForgeClient', () => {
       expect(result.remaining).toBe(99);
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:3001/api/v1/check',
+        'http://localhost:3000/api/v1/check',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -74,25 +74,19 @@ describe('RateForgeClient', () => {
       );
     });
 
-    it('throws SdkError on 429 response', async () => {
+    it('returns a blocked result when the gateway responds with allowed=false', async () => {
       fetchMock.mockResolvedValueOnce({
-        ok: false,
-        status: 429,
+        ok: true,
+        status: 200,
         json: async () => ({
-          success: false,
-          error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Rate limit exceeded' },
+          success: true,
           data: { allowed: false, limit: 100, remaining: 0, resetAt: Date.now() + 60000 },
         }),
       });
 
-      await expect(client.checkLimit(defaultReq)).rejects.toMatchObject({
-        status: 429,
-        message: 'Rate limit exceeded',
-        body: {
-          success: false,
-          error: { code: 'RATE_LIMIT_EXCEEDED' },
-          data: { allowed: false, remaining: 0 },
-        },
+      await expect(client.checkLimit(defaultReq)).resolves.toMatchObject({
+        allowed: false,
+        remaining: 0,
       });
     });
 
@@ -119,7 +113,7 @@ describe('RateForgeClient', () => {
       expect(res.clientId).toBe('user-123');
       expect(res.deletedKeys).toBe(5);
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:3001/api/v1/admin/reset/user-123',
+        'http://localhost:3000/api/v1/admin/reset/user-123',
         expect.objectContaining({
           method: 'POST',
         }),

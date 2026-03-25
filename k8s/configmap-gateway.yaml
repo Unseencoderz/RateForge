@@ -11,3 +11,4 @@ data:
   # In Kubernetes, we use the internal service name for Redis
   REDIS_URL: 'redis://rateforge-redis:6379'
   RATE_LIMITER_URL: 'http://rateforge-limiter:3001'
+  DOWNSTREAM_TARGET_URL: 'http://rateforge-downstream:8080'

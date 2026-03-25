@@ -1,26 +1,47 @@
-import { FRONTEND_URL } from '@rateforge/config';
+import { DOWNSTREAM_TARGET_URL, FRONTEND_URL } from '@rateforge/config';
 import { HTTP_STATUS_OK } from '@rateforge/types';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
+import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 
 import { loadRules } from './config/rules-loader';
 import { seedRulesStore } from './config/rules-store';
 import { adminRouter } from './controllers/admin.controller';
 import { metricsRegistry } from './metrics/registry';
+import { verifyToken } from './middleware/auth';
 import { errorHandler } from './middleware/error-handler';
 import { applyRateLimit } from './middleware/rate-limit';
 import { sendRateLimitResponse } from './middleware/rate-limit-response';
 import { attachRequestId } from './middleware/request-id';
 import { logRequests } from './middleware/request-logger';
 import { healthCheck } from './services/health-check';
+import { checkLimit as checkLimitWithLimiter } from './services/rate-limiter.client';
 import { logger } from './utils/logger';
 import { bindRequestContext } from './utils/request-context';
 
-import type { Express, Request, Response } from 'express';
+import type { ApiResponse, RateLimitRequest, RateLimitResult } from '@rateforge/types';
+import type { Express, NextFunction, Request, Response } from 'express';
 
 export const app: Express = express();
 app.set('trust proxy', true);
+
+const adminPlaneRouter = express.Router();
+adminPlaneRouter.use(applyRateLimit);
+adminPlaneRouter.use(sendRateLimitResponse);
+adminPlaneRouter.use(adminRouter);
+adminPlaneRouter.use((req: Request, res: Response) => {
+  res.status(404).send(`Cannot ${req.method} ${req.originalUrl}`);
+});
+
+const dataPlaneProxy = createProxyMiddleware({
+  target: DOWNSTREAM_TARGET_URL,
+  changeOrigin: true,
+  xfwd: true,
+  on: {
+    proxyReq: fixRequestBody,
+  },
+});
 
 // ── Core middleware ────────────────────────────────────────────────────────────
 app.use(helmet());
@@ -75,13 +96,26 @@ app.get('/ready', async (_req: Request, res: Response): Promise<void> => {
 });
 
 // ── API v1 router ─────────────────────────────────────────────────────────────
-const apiRouter = express.Router();
-apiRouter.use(applyRateLimit);
-apiRouter.use(sendRateLimitResponse);
-app.use('/api/v1', apiRouter);
+app.post('/api/v1/check', verifyToken, (req: Request, res: Response, next: NextFunction): void => {
+  void (async () => {
+    const result = await checkLimitWithLimiter(req.body as RateLimitRequest);
+
+    const body: ApiResponse<RateLimitResult> = {
+      success: true,
+      data: result,
+    };
+
+    res.status(HTTP_STATUS_OK).json(body);
+  })().catch(next);
+});
 
 // Admin routes (P2-M5): GET/POST /rules, POST /reset/:clientId
-apiRouter.use('/admin', adminRouter);
+app.use('/api/v1/admin', adminPlaneRouter);
+
+// Generic data-plane: rate-limit first, then forward to the configured target.
+app.use(applyRateLimit);
+app.use(sendRateLimitResponse);
+app.use(dataPlaneProxy);
 
 // ── Centralised error handler (P2-M1-T2) ─────────────────────────────────────
 //

@@ -11,7 +11,7 @@
  * import { RateForgeClient } from '@rateforge/sdk';
  *
  * const client = new RateForgeClient({
- *   baseUrl: 'http://localhost:3001',
+ *   baseUrl: 'http://localhost:3000',
  *   apiKey: 'my-jwt-or-api-key',
  * });
  *
@@ -33,7 +33,7 @@ import type {
 
 export interface RateForgeClientOptions {
   /**
-   * Base URL of the RateForge API gateway, e.g. `http://localhost:3001`.
+   * Base URL of the RateForge API gateway, e.g. `http://localhost:3000`.
    * Must NOT include a trailing slash.
    */
   baseUrl: string;
