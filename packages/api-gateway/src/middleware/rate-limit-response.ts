@@ -5,9 +5,9 @@ import { getRequestLogger } from '../utils/logger';
 import type { Request, Response, NextFunction } from 'express';
 
 /**
- * P2-M3-T2 · Rate limit response handler middleware.
+ * Rate limit response handler middleware.
  *
- * Must be registered AFTER `applyRateLimit` (P2-M3-T1) in the middleware
+ * Must be registered AFTER `applyRateLimit` in the middleware
  * pipeline so that `req.rateLimitResult` is guaranteed to be populated.
  *
  * Responsibilities:
@@ -44,8 +44,6 @@ export function sendRateLimitResponse(req: Request, res: Response, next: NextFun
     return;
   }
 
-  // ── 1. Standard informational headers (always set) ───────────────────────
-  //
   // Infinity arises when no rule matched or when the service failed open.
   // We omit those headers to avoid sending "Infinity" as a header value,
   // which would confuse HTTP clients.
@@ -66,13 +64,11 @@ export function sendRateLimitResponse(req: Request, res: Response, next: NextFun
     res.setHeader('X-RateLimit-Rule', result.ruleId);
   }
 
-  // ── 2. Allowed: pass to next middleware ───────────────────────────────────
   if (result.allowed) {
     next();
     return;
   }
 
-  // ── 3. Blocked: set Retry-After and send 429 ─────────────────────────────
   // Blacklisted requests should be forbidden (403), not rate-limited (429).
   if (result.reason === 'BLACKLISTED') {
     res.status(403).json({

@@ -58,7 +58,7 @@ app.use(helmet());
 app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
 
-// ── Request ID middleware (P2-M1-T3) ──────────────────────────────────────────
+// ── Request ID middleware ─────────────────────────────────────────────────────
 //
 // Attaches a UUID v4 to `req.id` and sets `X-Request-ID` response header on
 // every request. Downstream middleware and logs use this as the correlation ID.
@@ -74,7 +74,7 @@ app.use((req, _res, next) => {
 });
 app.use(logRequests);
 
-// ── Health / readiness endpoints (P2-M1-T4) ───────────────────────────────────
+// ── Health / readiness endpoints ──────────────────────────────────────────────
 //
 // /health  → Kubernetes liveness probe (always 200 if process is alive)
 // /ready   → Kubernetes readiness probe (checks Redis + rate-limiter connectivity)
@@ -153,7 +153,7 @@ app.post('/api/v1/check', verifyToken, (req: Request, res: Response, next: NextF
   })().catch(next);
 });
 
-// Admin routes (P2-M5): GET/POST /rules, POST /reset/:clientId
+// Admin routes
 app.use('/api/v1/admin', adminPlaneRouter);
 
 // Generic data-plane: rate-limit first, then forward to the configured target.
@@ -161,7 +161,7 @@ app.use(applyRateLimit);
 app.use(sendRateLimitResponse);
 app.use(dataPlaneProxy);
 
-// ── Centralised error handler (P2-M1-T2) ─────────────────────────────────────
+// ── Centralised error handler ────────────────────────────────────────────────
 //
 // ⚠️  Must be the LAST middleware registered.
 app.use(errorHandler);

@@ -27,7 +27,7 @@ export function BlockedClients({ loading, snapshot }: BlockedClientsProps) {
       ) : clients.length === 0 ? (
         <div className="chart-empty">No blocked clients yet. That is a healthy quiet table.</div>
       ) : (
-        <div className="table-shell">
+        <div className="table-shell table-shell-compact">
           <table>
             <thead>
               <tr>

@@ -1,5 +1,5 @@
 /**
- * P1-M6-T3 · RateLimitService resilience tests.
+ * RateLimitService resilience tests.
  *
  * Covers:
  *   1. Redis timeout → fail-open (allowed: true, reason: NO_RULE_MATCHED or fallback)
@@ -17,10 +17,10 @@ import type { RateLimitRequest, RuleConfig } from '@rateforge/types';
 
 function makeReq(overrides: Partial<RateLimitRequest> = {}): RateLimitRequest {
   return {
-    clientId:  'resilience-user',
-    identity:  { userId: 'resilience-user', ip: '1.2.3.4', tier: 'free' },
-    endpoint:  '/api/v1/test',
-    method:    'GET',
+    clientId: 'resilience-user',
+    identity: { userId: 'resilience-user', ip: '1.2.3.4', tier: 'free' },
+    endpoint: '/api/v1/test',
+    method: 'GET',
     timestamp: Date.now(),
     algorithm: AlgorithmType.TOKEN_BUCKET,
     ...overrides,
@@ -29,12 +29,12 @@ function makeReq(overrides: Partial<RateLimitRequest> = {}): RateLimitRequest {
 
 function makeRule(overrides: Partial<RuleConfig> = {}): RuleConfig {
   return {
-    id:              'resilience-rule',
+    id: 'resilience-rule',
     endpointPattern: '*',
-    windowMs:        60_000,
-    maxRequests:     5,
-    algorithm:       AlgorithmType.TOKEN_BUCKET,
-    enabled:         true,
+    windowMs: 60_000,
+    maxRequests: 5,
+    algorithm: AlgorithmType.TOKEN_BUCKET,
+    enabled: true,
     ...overrides,
   };
 }
@@ -46,7 +46,6 @@ beforeEach(() => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('RateLimitService resilience (P1-M6-T3)', () => {
-
   describe('fail-open: no rules active', () => {
     it('allows all requests when rule set is empty', async () => {
       setRules([]);
@@ -105,9 +104,7 @@ describe('RateLimitService resilience (P1-M6-T3)', () => {
   describe('concurrent requests do not corrupt counters', () => {
     it('5 concurrent requests against a limit-5 rule all get unique remaining values', async () => {
       setRules([makeRule({ id: 'concurrency-rule', maxRequests: 10 })]);
-      const results = await Promise.all(
-        Array.from({ length: 5 }, () => checkLimit(makeReq()))
-      );
+      const results = await Promise.all(Array.from({ length: 5 }, () => checkLimit(makeReq())));
       const allowedCount = results.filter((r: any) => r.allowed).length;
       // All 5 should be allowed (limit is 10)
       expect(allowedCount).toBe(5);

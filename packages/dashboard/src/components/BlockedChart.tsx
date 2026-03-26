@@ -18,8 +18,9 @@ const chartOptions: ChartOptions<'doughnut'> = {
     legend: {
       position: 'bottom',
       labels: {
-        color: '#302721',
+        color: '#d6e9ef',
         boxWidth: 14,
+        usePointStyle: true,
       },
     },
   },
@@ -28,6 +29,7 @@ const chartOptions: ChartOptions<'doughnut'> = {
 export function BlockedChart({ loading, snapshot }: BlockedChartProps) {
   const blockedRequests = snapshot?.blockedRequests ?? 0;
   const allowedRequests = snapshot?.allowedRequests ?? 0;
+  const cleanPassRatio = snapshot ? Math.max(0, 1 - snapshot.blockedRatio) : 0;
 
   return (
     <article className="panel chart-panel">
@@ -45,21 +47,25 @@ export function BlockedChart({ loading, snapshot }: BlockedChartProps) {
         <div className="chart-empty">Blocked ratio will appear after the first snapshot.</div>
       ) : (
         <div className="chart-stack">
-          <div className="chart-frame chart-frame-compact">
+          <div className="chart-frame chart-frame-compact ratio-frame">
             <Doughnut
               data={{
-                labels: ['Allowed', 'Blocked'],
+                labels: ['Clean pass', 'Rate limited'],
                 datasets: [
                   {
                     data: [allowedRequests, blockedRequests],
-                    backgroundColor: ['#0f766e', '#c45b35'],
-                    borderColor: ['#f7efe3', '#f7efe3'],
+                    backgroundColor: ['#69e6ff', '#bda8ff'],
+                    borderColor: ['#141c22', '#141c22'],
                     borderWidth: 2,
                   },
                 ],
               }}
               options={chartOptions}
             />
+            <div className="ratio-orb">
+              <strong>{snapshot ? formatPercent(cleanPassRatio) : '--'}</strong>
+              <span>clean pass</span>
+            </div>
           </div>
           <div className="metric-list">
             <div className="metric-row">

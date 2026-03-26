@@ -3,7 +3,7 @@ import type { RateLimitResult } from '@rateforge/types';
 import type { Redis } from 'ioredis';
 
 /**
- * P1-M3-T3 · FixedWindowCounter — Redis backend.
+ * FixedWindowCounter — Redis backend.
  *
  * Uses INCR + EXPIRE (set-on-first-write pattern) for atomicity.
  * A Lua script ensures the counter and TTL are set in a single round-trip.

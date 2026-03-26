@@ -3,7 +3,7 @@ import type { RateLimitResult } from '@rateforge/types';
 import type { Redis } from 'ioredis';
 
 /**
- * P1-M4-T3 · SlidingWindowLog — Redis backend.
+ * SlidingWindowLog — Redis backend.
  *
  * Uses ZADD + ZREMRANGEBYSCORE + ZCARD in a Lua script for atomicity.
  * Each request is stored as a scored set member (score = timestamp ms).

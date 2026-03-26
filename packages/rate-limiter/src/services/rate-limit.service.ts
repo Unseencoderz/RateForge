@@ -40,7 +40,7 @@ export function getRules(): RuleConfig[] {
 }
 
 /**
- * P2-M5-T3 · `resetLimit(clientId)`
+ * `resetLimit(clientId)`
  *
  * Deletes all Redis rate-limit keys associated with the given `clientId` and
  * evicts the corresponding in-memory algorithm-cache entries.
@@ -153,7 +153,7 @@ function getOrCreateAlgorithm(rule: RuleConfig): RateLimiterAlgorithm {
 }
 
 /**
- * P1-M5-T2 · RateLimitService
+ * RateLimitService
  *
  * `checkLimit(req)` is the single entry point used by downstream middleware.
  * It:

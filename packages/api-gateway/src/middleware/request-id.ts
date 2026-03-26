@@ -25,7 +25,7 @@ function getHeaderValue(header: string | string[] | undefined): string | undefin
 }
 
 /**
- * P2-M1-T3 · Request ID middleware.
+ * Request ID middleware.
  *
  * Attaches a UUID v4 to `req.id` and sets the `X-Request-ID` response header
  * on every request. Used as the correlation ID in all logs and metrics.

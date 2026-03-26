@@ -4,7 +4,7 @@ import type { Server } from 'http';
 import type { Redis } from 'ioredis';
 
 /**
- * P1-M6-T2 · Graceful shutdown handler.
+ * Graceful shutdown handler.
  *
  * Registers SIGTERM and SIGINT handlers that:
  *   1. Stop accepting new connections (server.close).

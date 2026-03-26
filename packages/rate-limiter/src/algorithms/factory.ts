@@ -14,7 +14,7 @@ import type { RuleConfig } from '@rateforge/types';
 import type { Redis } from 'ioredis';
 
 /**
- * P1-M5-T1 · AlgorithmFactory
+ * AlgorithmFactory
  *
  * Returns a new algorithm instance configured from the given rule.
  * Services must never import algorithm classes directly — always go through this factory.

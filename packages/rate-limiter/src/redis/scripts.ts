@@ -4,7 +4,7 @@ import path from 'path';
 import type { Redis } from 'ioredis';
 
 /**
- * P1-M2-T3 · Redis Lua script loader and executor.
+ * Redis Lua script loader and executor.
  *
  * Uses EVALSHA with automatic fallback to EVAL so the script is uploaded
  * once and referenced by SHA on subsequent calls.

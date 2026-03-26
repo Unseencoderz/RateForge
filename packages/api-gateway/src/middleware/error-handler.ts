@@ -6,7 +6,7 @@ import type { ApiResponse } from '@rateforge/types';
 import type { Request, Response, NextFunction } from 'express';
 
 /**
- * P2-M1-T2 · Centralised error handler.
+ * Centralised error handler.
  *
  * ⚠️  Must be the LAST middleware registered in app.ts.
  * Catches any error forwarded via next(err) and maps it to ApiResponse shape.

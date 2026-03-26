@@ -42,7 +42,7 @@ declare global {
 }
 
 /**
- * P2-M2-T1 · JWT auth middleware.
+ * JWT auth middleware.
  *
  * Reads the `Authorization: Bearer <token>` header, verifies the JWT using
  * JWT_SECRET, and attaches `req.clientIdentity` for downstream middleware.
@@ -65,7 +65,7 @@ export async function verifyToken(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  const token = authHeader.slice(7); // strip "Bearer "
+  const token = authHeader.slice(7);
 
   try {
     const payload = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;

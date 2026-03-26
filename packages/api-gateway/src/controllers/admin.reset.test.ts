@@ -1,5 +1,5 @@
 /**
- * P2-M5-T3 · POST /api/v1/admin/reset/:clientId — tests
+ * POST /api/v1/admin/reset/:clientId — tests
  *
  * Strategy
  * ─────────
@@ -17,22 +17,24 @@ import request from 'supertest';
 const resetLimitMock = jest.fn<() => Promise<number>>();
 
 jest.mock('../services/rate-limiter.client', () => ({
-  getRules:   jest.fn().mockReturnValue([]),
-  resetLimit: (...args: any[]) => (resetLimitMock as any)(...args)
+  getRules: jest.fn().mockReturnValue([]),
+  resetLimit: (...args: any[]) => (resetLimitMock as any)(...args),
 }));
 
 jest.mock('ioredis', () => {
-  const M = jest.fn().mockImplementation(() => ({ publish: jest.fn<any>().mockResolvedValue(1) })) as any;
+  const M = jest
+    .fn()
+    .mockImplementation(() => ({ publish: jest.fn<any>().mockResolvedValue(1) })) as any;
   (M as any).default = M;
   return { __esModule: true, default: M };
 });
 
 jest.mock('@rateforge/config', () => ({ REDIS_URL: 'redis://localhost:6379' }));
 jest.mock('../config/rules-loader', () => ({ getRulesPath: () => '/fake/rules.json' }));
-jest.mock('../config/rules-watcher',() => ({ RULES_UPDATE_CHANNEL: 'rateforge:rules:update' }));
+jest.mock('../config/rules-watcher', () => ({ RULES_UPDATE_CHANNEL: 'rateforge:rules:update' }));
 jest.mock('fs', () => ({
   writeFileSync: jest.fn(),
-  renameSync:    jest.fn()
+  renameSync: jest.fn(),
 }));
 
 jest.mock('../middleware/auth', () => ({
@@ -183,8 +185,7 @@ describe('POST /api/v1/admin/reset/:clientId (P2-M5-T3)', () => {
     it('responds to POST /api/v1/admin/reset/:clientId with HTTP 200', async () => {
       resetLimitMock.mockResolvedValueOnce(3);
 
-      const res = await request(buildRouterApp())
-        .post('/api/v1/admin/reset/bob');
+      const res = await request(buildRouterApp()).post('/api/v1/admin/reset/bob');
 
       expect(res.status).toBe(200);
     });

@@ -1,5 +1,5 @@
 /**
- * P2-M4-T2 · Redis Pub/Sub hot-reload watcher — unit tests
+ * Redis Pub/Sub hot-reload watcher — unit tests
  */
 
 import { jest } from '@jest/globals';

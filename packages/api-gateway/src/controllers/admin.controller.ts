@@ -70,14 +70,14 @@ function findDuplicateIds(rules: RuleConfig[]): string[] {
 }
 
 /**
- * P2-M5-T1 · GET /api/v1/admin/rules
+ * GET /api/v1/admin/rules
  *
  * Returns the current in-memory rule set as a typed `ApiResponse<RuleConfig[]>`.
  *
  * Design notes:
  * - Reads from `RateLimitService.getRules()` — the single source of truth for
  *   the active rule set. Both the startup `loadRules()` call and the hot-reload
- *   watcher (P2-M4-T2) update this store via `setRules()`.
+ *   watcher updates this store via `setRules()`.
  * - Returns a shallow copy (guaranteed by `getRules()`), so callers cannot
  *   mutate the live rule store through the response object.
  * - Never reads from disk — this reflects what is *currently enforced*, which
@@ -113,7 +113,7 @@ export async function getAdminRules(req: Request, res: Response): Promise<void> 
 // ── POST handler ─────────────────────────────────────────────────────────────
 
 /**
- * P2-M5-T2 · POST /api/v1/admin/rules
+ * POST /api/v1/admin/rules
  *
  * ⚠️  THIS IS THE ONLY ENDPOINT THAT WRITES TO DISK.
  *    All other endpoints are read-only or operate purely in memory.
@@ -139,7 +139,6 @@ export async function getAdminRules(req: Request, res: Response): Promise<void> 
  *   500  — unexpected file system or Redis error
  */
 export async function postAdminRules(req: Request, res: Response): Promise<void> {
-  // ── 1. Validate body ────────────────────────────────────────────────────────
   const parseResult = AdminRulePayloadSchema.safeParse(req.body);
 
   if (!parseResult.success) {
@@ -162,7 +161,6 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
 
   const payload = parseResult.data as AdminRulePayload;
 
-  // ── 2. Duplicate-id guard ───────────────────────────────────────────────────
   const dupes = findDuplicateIds(payload.rules);
 
   if (dupes.length > 0) {
@@ -178,8 +176,6 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
   }
 
   try {
-    // ── 3. Atomic write to disk ─────────────────────────────────────────────
-    //
     // Write to a `.tmp` sibling file first, then rename (atomic on POSIX).
     // This prevents a partially-written `rules.json` from being read by the
     // hot-reload watcher between the open() and close() syscalls.
@@ -197,10 +193,8 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
       fileName: path.basename(rulesPath),
     });
 
-    // ── 4. Persist to the shared Redis rules store ──────────────────────────
     await persistRulesToStore(payload.rules);
 
-    // ── 5. Respond 201 ─────────────────────────────────────────────────────
     const body: ApiResponse<RuleConfig[]> = {
       success: true,
       data: payload.rules,
@@ -227,7 +221,7 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
 }
 
 /**
- * P2-M5-T3 · POST /api/v1/admin/reset/:clientId
+ * POST /api/v1/admin/reset/:clientId
  *
  * Deletes all Redis rate-limit keys for the specified client and evicts the
  * in-memory algorithm cache so the client starts fresh on the next request.
@@ -243,7 +237,6 @@ export async function postAdminRules(req: Request, res: Response): Promise<void>
 export async function postAdminResetClient(req: Request, res: Response): Promise<void> {
   const { clientId } = req.params;
 
-  // ── Validate param ──────────────────────────────────────────────────────────
   if (!clientId || clientId.trim() === '') {
     const body: ApiResponse<never> = {
       success: false,
@@ -279,7 +272,7 @@ export async function postAdminResetClient(req: Request, res: Response): Promise
 }
 
 /**
- * P2-M5-T4 · POST /api/v1/admin/blacklist
+ * POST /api/v1/admin/blacklist
  *
  * Adds an IP address to the shared blacklist (rate-limiter service).
  */
@@ -308,7 +301,7 @@ export async function postAdminBlacklist(req: Request, res: Response): Promise<v
 }
 
 /**
- * P2-M5-T4 · POST /api/v1/admin/whitelist
+ * POST /api/v1/admin/whitelist
  *
  * Adds an IP address to the shared whitelist (rate-limiter service).
  */
@@ -336,36 +329,16 @@ export async function postAdminWhitelist(req: Request, res: Response): Promise<v
   }
 }
 
-// ── Router factory ────────────────────────────────────────────────────────────
-//
-// Usage in app.ts:
-//   import { adminRouter } from './controllers/admin.controller';
-//   apiRouter.use('/admin', adminRouter);
-
 export const adminRouter: Router = Router();
 
-// Parse JSON bodies for all admin routes
 adminRouter.use(express.json());
 
-// Protect all admin routes with JWT auth
 adminRouter.use(verifyToken);
 adminRouter.use(requireAdmin);
-
-/** GET /api/v1/admin/rules — returns the currently active rule set */
 adminRouter.get('/rules', (req, res, next) => {
   getAdminRules(req, res).catch(next);
 });
-
-/**
- * POST /api/v1/admin/rules — replaces the rule set.
- * ⚠️  Only endpoint that writes to disk. See handler JSDoc for full lifecycle.
- */
 adminRouter.post('/rules', postAdminRules);
-
-/**
- * POST /api/v1/admin/reset/:clientId
- * Resets the rate-limit counters for the given client in Redis.
- */
 adminRouter.post('/reset/:clientId', postAdminResetClient);
 
 adminRouter.post('/blacklist', (req, res, next) => {

@@ -24,17 +24,17 @@ declare global {
 }
 
 /**
- * P2-M3-T1 · Rate limit middleware.
+ * Rate limit middleware.
  *
  * Responsibilities:
- *   1. Reads `req.clientIdentity` set by the JWT auth middleware (P2-M2-T1).
+ *   1. Reads `req.clientIdentity` set by the JWT auth middleware.
  *   2. Builds a `RateLimitRequest` from the incoming Express request.
- *   3. Calls `RateLimitService.checkLimit()` (P1-M5-T2).
+ *   3. Calls `RateLimitService.checkLimit()`.
  *   4. Attaches the returned `RateLimitResult` to `req.rateLimitResult`.
  *   5. Always calls `next()` — it does NOT send an HTTP response.
  *
  * ⚠️  Response handling (setting headers, sending 429) is implemented in the
- *     separate `rate-limit-response` middleware (P2-M3-T2).  Keeping the check
+ *     separate `rate-limit-response` middleware. Keeping the check
  *     and response separate makes each piece independently testable.
  *
  * If auth middleware has already run, authenticated identities are used for

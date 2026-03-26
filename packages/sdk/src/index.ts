@@ -1,5 +1,5 @@
 /**
- * @rateforge/sdk — P3-M1-T1
+ * @rateforge/sdk
  *
  * Thin HTTP wrapper around the RateForge API gateway.
  * This package intentionally has zero runtime dependencies beyond
@@ -157,12 +157,12 @@ function isJwtExpired(token: string): boolean {
 // ── RateForgeClient ───────────────────────────────────────────────────────────
 
 /**
- * P3-M1-T1 · `RateForgeClient`
+ * `RateForgeClient`
  *
  * Thin HTTP client for the RateForge API gateway. Exposes one method per
  * gateway endpoint so callers never construct raw `fetch` calls themselves.
  *
- * Design constraints (from DevPlan):
+ * Design constraints:
  * - Never imports Express, Redis, or any server-side runtime.
  * - Passphrase mode caches a gateway-issued JWT between calls.
  * - Concurrent callers share a single in-flight authentication exchange.
@@ -302,7 +302,7 @@ export class RateForgeClient {
   // ── Public API ────────────────────────────────────────────────────────────
 
   /**
-   * P3-M1-T2 · Check whether a request is within the rate limit.
+   * Check whether a request is within the rate limit.
    *
    * Maps to: `POST /api/v1/check`
    *
@@ -313,7 +313,7 @@ export class RateForgeClient {
   }
 
   /**
-   * P3-M1-T3 · Delete all Redis counters for the given clientId so the
+   * Delete all Redis counters for the given clientId so the
    * client starts fresh on its next request.
    *
    * Maps to: `POST /api/v1/admin/reset/:clientId`
@@ -328,7 +328,7 @@ export class RateForgeClient {
   }
 
   /**
-   * P3-M1-T3 · Return the currently active rule set as seen by the gateway.
+   * Return the currently active rule set as seen by the gateway.
    *
    * Maps to: `GET /api/v1/admin/rules`
    *

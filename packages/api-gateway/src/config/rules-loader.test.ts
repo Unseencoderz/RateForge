@@ -1,5 +1,5 @@
 /**
- * P2-M4-T1 / P2-M4-T3 · Rules config loader — unit tests
+ * Rules config loader — unit tests
  *
  * Strategy
  * ─────────
@@ -36,7 +36,7 @@ const VALID_RULE: RuleConfig = {
   windowMs: 60_000,
   maxRequests: 60,
   algorithm: AlgorithmType.TOKEN_BUCKET,
-  enabled: true
+  enabled: true,
 };
 
 const VALID_RULES_JSON = JSON.stringify([VALID_RULE]);
@@ -59,7 +59,7 @@ describe('loadRules (P2-M4-T1)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Suppress console.error output for fatal-path tests
-    jest.spyOn(console, 'error').mockImplementation(() => { });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -79,16 +79,14 @@ describe('loadRules (P2-M4-T1)', () => {
     });
 
     it('accepts all four algorithm types', () => {
-      const allAlgos: RuleConfig[] = Object.values(AlgorithmType).map(
-        (algo, i) => ({
-          id: `rule-${i}`,
-          endpointPattern: '*',
-          windowMs: 60_000,
-          maxRequests: 10,
-          algorithm: algo,
-          enabled: true
-        })
-      );
+      const allAlgos: RuleConfig[] = Object.values(AlgorithmType).map((algo, i) => ({
+        id: `rule-${i}`,
+        endpointPattern: '*',
+        windowMs: 60_000,
+        maxRequests: 10,
+        algorithm: algo,
+        enabled: true,
+      }));
       mockFile(JSON.stringify(allAlgos));
 
       const rules = loadRules('/fake/rules.json');
@@ -108,7 +106,7 @@ describe('loadRules (P2-M4-T1)', () => {
         maxRequests: 200,
         burstCapacity: 50,
         algorithm: AlgorithmType.SLIDING_WINDOW,
-        enabled: false
+        enabled: false,
       };
       mockFile(JSON.stringify([full]));
 
@@ -129,7 +127,7 @@ describe('loadRules (P2-M4-T1)', () => {
     it('loads multiple rules and preserves order', () => {
       const rules: RuleConfig[] = [
         { ...VALID_RULE, id: 'first' },
-        { ...VALID_RULE, id: 'second', clientTier: 'pro', maxRequests: 120 }
+        { ...VALID_RULE, id: 'second', clientTier: 'pro', maxRequests: 120 },
       ];
       mockFile(JSON.stringify(rules));
 
@@ -146,17 +144,13 @@ describe('loadRules (P2-M4-T1)', () => {
     it('throws with a descriptive message when the file does not exist', () => {
       mockFileError('ENOENT: no such file or directory');
 
-      expect(() => loadRules('/missing/rules.json')).toThrow(
-        /not found|RULES_PATH/i
-      );
+      expect(() => loadRules('/missing/rules.json')).toThrow(/not found|RULES_PATH/i);
     });
 
     it('throws with a descriptive message when the file is not readable (EACCES)', () => {
       mockFileError('EACCES: permission denied');
 
-      expect(() => loadRules('/locked/rules.json')).toThrow(
-        /not found|RULES_PATH/i
-      );
+      expect(() => loadRules('/locked/rules.json')).toThrow(/not found|RULES_PATH/i);
     });
   });
 
@@ -315,7 +309,9 @@ describe('loadRules (P2-M4-T1)', () => {
       mockFile(JSON.stringify([withExtra]));
 
       let thrownMessage = '';
-      try { loadRules('/fake/rules.json'); } catch (err) {
+      try {
+        loadRules('/fake/rules.json');
+      } catch (err) {
         thrownMessage = err instanceof Error ? err.message : String(err);
       }
 
@@ -339,7 +335,7 @@ describe('loadRules (P2-M4-T1)', () => {
     it('throws when two rules share the same id', () => {
       const dupe = [
         { ...VALID_RULE, id: 'clash' },
-        { ...VALID_RULE, id: 'clash' }
+        { ...VALID_RULE, id: 'clash' },
       ];
       mockFile(JSON.stringify(dupe));
 
@@ -347,10 +343,12 @@ describe('loadRules (P2-M4-T1)', () => {
     });
 
     it('allows rules with distinct ids', () => {
-      mockFile(JSON.stringify([
-        { ...VALID_RULE, id: 'rule-a' },
-        { ...VALID_RULE, id: 'rule-b' }
-      ]));
+      mockFile(
+        JSON.stringify([
+          { ...VALID_RULE, id: 'rule-a' },
+          { ...VALID_RULE, id: 'rule-b' },
+        ]),
+      );
 
       const result = loadRules('/fake/rules.json');
 

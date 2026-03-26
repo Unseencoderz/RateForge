@@ -1,9 +1,9 @@
 /**
- * P2-M3-T3 · Rate limit middleware — Supertest integration tests
+ * Rate limit middleware — Supertest integration tests
  *
  * Tests the FULL three-middleware pipeline as wired in the Express app:
  *
- *   applyRateLimit  (P2-M3-T1)  →  sendRateLimitResponse  (P2-M3-T2)  →  handler
+ *   applyRateLimit  →  sendRateLimitResponse  →  handler
  *
  * Strategy
  * ─────────
@@ -83,8 +83,8 @@ function buildApp() {
     next();
   });
 
-  app.use(applyRateLimit); // P2-M3-T1 — attaches req.rateLimitResult
-  app.use(sendRateLimitResponse); // P2-M3-T2 — sets headers or sends 429
+  app.use(applyRateLimit);
+  app.use(sendRateLimitResponse);
 
   // Sentinel route — reached only when the request is allowed through
   app.get('/api/v1/test', (_req, res) => {
@@ -275,7 +275,7 @@ describe('P2-M3-T3 · Rate limit middleware integration (Supertest)', () => {
     });
   });
 
-  // ── Blacklist / Whitelist behaviour (P2-M5-T4) ────────────────────────────
+  // ── Blacklist / Whitelist behaviour ───────────────────────────────────────
 
   describe('blacklist / whitelist checks', () => {
     it('blacklisted IP returns HTTP 403 and does not call checkLimit()', async () => {

@@ -1,5 +1,5 @@
 /**
- * P2-M5-T2 · POST /api/v1/admin/rules — Supertest tests
+ * POST /api/v1/admin/rules — Supertest tests
  *
  * Strategy
  * ─────────

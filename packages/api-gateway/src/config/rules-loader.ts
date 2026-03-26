@@ -13,51 +13,44 @@ import type { RuleConfig } from '@rateforge/types';
 
 const AlgorithmTypeSchema = z.nativeEnum(AlgorithmType);
 
-const RuleConfigSchema = z.object({
-  id: z
-    .string()
-    .min(1, 'Rule id must be a non-empty string'),
+const RuleConfigSchema = z
+  .object({
+    id: z.string().min(1, 'Rule id must be a non-empty string'),
 
-  description: z
-    .string()
-    .optional(),
+    description: z.string().optional(),
 
-  clientTier: z
-    .string()
-    .optional(),
+    clientTier: z.string().optional(),
 
-  endpointPattern: z
-    .string()
-    .min(1, 'endpointPattern must be a non-empty string (use "*" to match all)'),
+    endpointPattern: z
+      .string()
+      .min(1, 'endpointPattern must be a non-empty string (use "*" to match all)'),
 
-  method: z
-    .string()
-    .toUpperCase()
-    .optional(),
+    method: z.string().toUpperCase().optional(),
 
-  windowMs: z
-    .number()
-    .int('windowMs must be an integer')
-    .positive('windowMs must be a positive number of milliseconds'),
+    windowMs: z
+      .number()
+      .int('windowMs must be an integer')
+      .positive('windowMs must be a positive number of milliseconds'),
 
-  maxRequests: z
-    .number()
-    .int('maxRequests must be an integer')
-    .positive('maxRequests must be greater than zero'),
+    maxRequests: z
+      .number()
+      .int('maxRequests must be an integer')
+      .positive('maxRequests must be greater than zero'),
 
-  burstCapacity: z
-    .number()
-    .int('burstCapacity must be an integer')
-    .nonnegative('burstCapacity must be >= 0')
-    .optional(),
+    burstCapacity: z
+      .number()
+      .int('burstCapacity must be an integer')
+      .nonnegative('burstCapacity must be >= 0')
+      .optional(),
 
-  algorithm: AlgorithmTypeSchema,
+    algorithm: AlgorithmTypeSchema,
 
-  enabled: z.boolean()
-// .strict() causes Zod to reject any key not listed above.
-// Without it, a typo like `maxRequest` (missing 's') would be silently dropped
-// and the rule would behave as if maxRequests were missing — dangerous at runtime.
-}).strict();
+    enabled: z.boolean(),
+    // .strict() causes Zod to reject any key not listed above.
+    // Without it, a typo like `maxRequest` (missing 's') would be silently dropped
+    // and the rule would behave as if maxRequests were missing — dangerous at runtime.
+  })
+  .strict();
 
 /** Array wrapper — rules.json must be a JSON array at the top level. */
 const RulesFileSchema = z
@@ -91,7 +84,7 @@ export function getRulesPath(): string {
 // ── Loader ────────────────────────────────────────────────────────────────────
 
 /**
- * P2-M4-T1 · `loadRules()`
+ * `loadRules()`
  *
  * Reads the JSON rule configuration file, validates every field against the
  * Zod schema, and returns a fully-typed `RuleConfig[]`.
@@ -104,7 +97,6 @@ export function getRulesPath(): string {
  *                   Defaults to `getRulesPath()`.
  */
 export function loadRules(rulesPath: string = getRulesPath()): RuleConfig[] {
-  // ── 1. Read file ────────────────────────────────────────────────────────────
   let raw: string;
 
   try {
@@ -112,24 +104,19 @@ export function loadRules(rulesPath: string = getRulesPath()): RuleConfig[] {
   } catch (err) {
     throw new Error(
       `rules.json not found at ${rulesPath}. ` +
-      `Create the file or set the RULES_PATH environment variable.`
+        `Create the file or set the RULES_PATH environment variable.`,
     );
   }
 
-  // ── 2. Parse JSON ───────────────────────────────────────────────────────────
   let parsed: unknown;
 
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `[rules-loader] FATAL: "${rulesPath}" is not valid JSON.\n` +
-      `  ${message}`
-    );
+    throw new Error(`[rules-loader] FATAL: "${rulesPath}" is not valid JSON.\n` + `  ${message}`);
   }
 
-  // ── 3. Validate with Zod ───────────────────────────────────────────────────
   const result = RulesFileSchema.safeParse(parsed);
 
   if (!result.success) {
@@ -139,20 +126,19 @@ export function loadRules(rulesPath: string = getRulesPath()): RuleConfig[] {
 
     throw new Error(
       `[rules-loader] FATAL: "${rulesPath}" failed schema validation.\n` +
-      `${issues}\n\n` +
-      `  Fix the rule configuration and restart the process.`
+        `${issues}\n\n` +
+        `  Fix the rule configuration and restart the process.`,
     );
   }
 
-  // ── 4. Duplicate-id guard ───────────────────────────────────────────────────
   const ids = result.data.map((r) => r.id);
   const duplicates = ids.filter((id, i) => ids.indexOf(id) !== i);
 
   if (duplicates.length > 0) {
     throw new Error(
       `[rules-loader] FATAL: Duplicate rule ids found in "${rulesPath}": ` +
-      `${[...new Set(duplicates)].join(', ')}\n` +
-      `  Each rule must have a unique id.`
+        `${[...new Set(duplicates)].join(', ')}\n` +
+        `  Each rule must have a unique id.`,
     );
   }
 

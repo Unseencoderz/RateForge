@@ -52,7 +52,7 @@ export interface RulesWatcherHandle {
 // ── Implementation ────────────────────────────────────────────────────────────
 
 /**
- * P2-M4-T2 · Redis Pub/Sub hot-reload watcher.
+ * Redis Pub/Sub hot-reload watcher.
  *
  * Opens a **dedicated** IORedis subscriber connection (a client in subscribe
  * mode cannot execute normal commands — using the shared client here would
@@ -130,7 +130,7 @@ export function startRulesWatcher(options: RulesWatcherOptions): RulesWatcherHan
 
   subscriber.on('message', (channel: string, _message: string) => {
     if (channel !== RULES_UPDATE_CHANNEL) {
-      return; // defensive: ignore unrelated channels
+      return;
     }
 
     logger.info({

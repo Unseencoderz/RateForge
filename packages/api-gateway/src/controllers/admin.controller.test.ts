@@ -1,5 +1,5 @@
 /**
- * P2-M5-T1 · Admin controller — unit + Supertest tests
+ * Admin controller — unit + Supertest tests
  *
  * Strategy
  * ─────────
@@ -23,7 +23,7 @@ import type { RuleConfig } from '@rateforge/types';
 const getRulesMock = jest.fn<() => RuleConfig[]>();
 
 jest.mock('../services/rate-limiter.client', () => ({
-  getRules: () => getRulesMock()
+  getRules: () => getRulesMock(),
 }));
 
 jest.mock('@rateforge/config', () => ({
@@ -31,7 +31,7 @@ jest.mock('@rateforge/config', () => ({
   JWT_SECRET: 'test-secret',
   NODE_ENV: 'test',
   PORT: 8080,
-  LOG_LEVEL: 'info'
+  LOG_LEVEL: 'info',
 }));
 
 jest.mock('../middleware/auth', () => ({
@@ -53,7 +53,7 @@ const RULE_A: RuleConfig = {
   windowMs: 60_000,
   maxRequests: 30,
   algorithm: AlgorithmType.TOKEN_BUCKET,
-  enabled: true
+  enabled: true,
 };
 
 const RULE_B: RuleConfig = {
@@ -62,7 +62,7 @@ const RULE_B: RuleConfig = {
   windowMs: 60_000,
   maxRequests: 120,
   algorithm: AlgorithmType.SLIDING_WINDOW,
-  enabled: true
+  enabled: true,
 };
 
 // ── Build minimal Express apps ────────────────────────────────────────────────
@@ -187,7 +187,9 @@ describe('GET /api/v1/admin/rules — admin controller (P2-M5-T1)', () => {
     });
 
     it('returns success: false on error', async () => {
-      getRulesMock.mockImplementationOnce(() => { throw new Error('oops'); });
+      getRulesMock.mockImplementationOnce(() => {
+        throw new Error('oops');
+      });
 
       const res = await request(buildHandlerApp()).get('/rules');
 
@@ -195,7 +197,9 @@ describe('GET /api/v1/admin/rules — admin controller (P2-M5-T1)', () => {
     });
 
     it('returns code: INTERNAL_ERROR in the error body', async () => {
-      getRulesMock.mockImplementationOnce(() => { throw new Error('oops'); });
+      getRulesMock.mockImplementationOnce(() => {
+        throw new Error('oops');
+      });
 
       const res = await request(buildHandlerApp()).get('/rules');
 
