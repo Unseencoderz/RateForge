@@ -201,12 +201,12 @@ export function RulesPage() {
     <div className="page-stack">
       <section className="page-header">
         <div className="page-copy">
-          <span className="section-kicker">Policy surface</span>
-          <h2>Shape the live ruleset without leaving the console.</h2>
+          <span className="section-kicker">Rules management</span>
+          <h2>Operate the live ruleset with guard rails</h2>
           <p>
-            The page still works through the existing admin API contract: every add or delete
-            operation replaces the full rules array so the dashboard stays aligned with the gateway
-            behavior already implemented in the backend.
+            This page works with the existing admin API by replacing the full rules array whenever
+            you add or remove a rule. That keeps the frontend aligned with the gateway contract that
+            already exists today.
           </p>
         </div>
         <div className="page-actions">
@@ -226,135 +226,112 @@ export function RulesPage() {
       {success ? <div className="success-banner">{success}</div> : null}
 
       <section className="rules-layout">
-        <article className="panel policy-composer">
+        <article className="panel">
           <div className="panel-heading">
             <div>
-              <span className="section-kicker">Policy composer</span>
+              <span className="section-kicker">Add rule</span>
               <h3>Compose a new policy</h3>
             </div>
             <strong>{saving ? 'Saving...' : 'Ready'}</strong>
           </div>
           <form className="rule-form" onSubmit={(event) => void handleAddRule(event)}>
-            <section className="form-section">
-              <div className="form-section-heading">
-                <span>01.</span>
-                <strong>Entry trigger</strong>
-              </div>
-              <div className="form-grid">
-                <label>
-                  <span>Rule ID</span>
-                  <input
-                    name="id"
-                    value={form.id}
-                    onChange={handleFieldChange}
-                    placeholder="pro-read-burst"
-                  />
-                </label>
-                <label>
-                  <span>Endpoint pattern</span>
-                  <input
-                    name="endpointPattern"
-                    value={form.endpointPattern}
-                    onChange={handleFieldChange}
-                    placeholder="/api/v1/orders"
-                  />
-                </label>
-                <label>
-                  <span>HTTP method</span>
-                  <input
-                    name="method"
-                    value={form.method}
-                    onChange={handleFieldChange}
-                    placeholder="GET"
-                  />
-                </label>
-                <label>
-                  <span>Client tier</span>
-                  <input
-                    name="clientTier"
-                    value={form.clientTier}
-                    onChange={handleFieldChange}
-                    placeholder="pro"
-                  />
-                </label>
-              </div>
-            </section>
-
-            <section className="form-section">
-              <div className="form-section-heading">
-                <span>02.</span>
-                <strong>Rule logic</strong>
-              </div>
-              <div className="form-grid">
-                <label>
-                  <span>Window (ms)</span>
-                  <input
-                    name="windowMs"
-                    type="number"
-                    min="1"
-                    value={form.windowMs}
-                    onChange={handleFieldChange}
-                  />
-                </label>
-                <label>
-                  <span>Max requests</span>
-                  <input
-                    name="maxRequests"
-                    type="number"
-                    min="1"
-                    value={form.maxRequests}
-                    onChange={handleFieldChange}
-                  />
-                </label>
-                <label>
-                  <span>Burst capacity</span>
-                  <input
-                    name="burstCapacity"
-                    type="number"
-                    min="0"
-                    value={form.burstCapacity}
-                    onChange={handleFieldChange}
-                    placeholder="Optional"
-                  />
-                </label>
-                <label>
-                  <span>Algorithm</span>
-                  <select name="algorithm" value={form.algorithm} onChange={handleFieldChange}>
-                    <option value={AlgorithmType.TOKEN_BUCKET}>Token bucket</option>
-                    <option value={AlgorithmType.FIXED_WINDOW}>Fixed window</option>
-                    <option value={AlgorithmType.SLIDING_WINDOW}>Sliding window</option>
-                    <option value={AlgorithmType.LEAKY_BUCKET}>Leaky bucket</option>
-                  </select>
-                </label>
-              </div>
-            </section>
-
-            <section className="form-section">
-              <div className="form-section-heading">
-                <span>03.</span>
-                <strong>Resulting action</strong>
-              </div>
-              <label className="form-area">
-                <span>Description</span>
-                <textarea
-                  name="description"
-                  value={form.description}
-                  onChange={handleFieldChange}
-                  rows={4}
-                  placeholder="Describe why this rule exists and who it protects."
-                />
-              </label>
-              <label className="checkbox-row">
+            <div className="form-grid">
+              <label>
+                <span>Rule ID</span>
                 <input
-                  name="enabled"
-                  type="checkbox"
-                  checked={form.enabled}
+                  name="id"
+                  value={form.id}
+                  onChange={handleFieldChange}
+                  placeholder="pro-read-burst"
+                />
+              </label>
+              <label>
+                <span>Endpoint pattern</span>
+                <input
+                  name="endpointPattern"
+                  value={form.endpointPattern}
+                  onChange={handleFieldChange}
+                  placeholder="/api/v1/orders"
+                />
+              </label>
+              <label>
+                <span>HTTP method</span>
+                <input
+                  name="method"
+                  value={form.method}
+                  onChange={handleFieldChange}
+                  placeholder="GET"
+                />
+              </label>
+              <label>
+                <span>Client tier</span>
+                <input
+                  name="clientTier"
+                  value={form.clientTier}
+                  onChange={handleFieldChange}
+                  placeholder="pro"
+                />
+              </label>
+              <label>
+                <span>Window (ms)</span>
+                <input
+                  name="windowMs"
+                  type="number"
+                  min="1"
+                  value={form.windowMs}
                   onChange={handleFieldChange}
                 />
-                <span>Rule is enabled immediately after save.</span>
               </label>
-            </section>
-
+              <label>
+                <span>Max requests</span>
+                <input
+                  name="maxRequests"
+                  type="number"
+                  min="1"
+                  value={form.maxRequests}
+                  onChange={handleFieldChange}
+                />
+              </label>
+              <label>
+                <span>Burst capacity</span>
+                <input
+                  name="burstCapacity"
+                  type="number"
+                  min="0"
+                  value={form.burstCapacity}
+                  onChange={handleFieldChange}
+                  placeholder="Optional"
+                />
+              </label>
+              <label>
+                <span>Algorithm</span>
+                <select name="algorithm" value={form.algorithm} onChange={handleFieldChange}>
+                  <option value={AlgorithmType.TOKEN_BUCKET}>Token bucket</option>
+                  <option value={AlgorithmType.FIXED_WINDOW}>Fixed window</option>
+                  <option value={AlgorithmType.SLIDING_WINDOW}>Sliding window</option>
+                  <option value={AlgorithmType.LEAKY_BUCKET}>Leaky bucket</option>
+                </select>
+              </label>
+            </div>
+            <label className="form-area">
+              <span>Description</span>
+              <textarea
+                name="description"
+                value={form.description}
+                onChange={handleFieldChange}
+                rows={4}
+                placeholder="Describe why this rule exists and who it protects."
+              />
+            </label>
+            <label className="checkbox-row">
+              <input
+                name="enabled"
+                type="checkbox"
+                checked={form.enabled}
+                onChange={handleFieldChange}
+              />
+              <span>Rule is enabled immediately after save.</span>
+            </label>
             <div className="form-footer">
               <p className="subtle-label">
                 Posts to <code>/api/v1/admin/rules</code> as a full replacement payload.
@@ -364,16 +341,16 @@ export function RulesPage() {
                 type="submit"
                 disabled={saving || !canManageRules}
               >
-                {saving ? 'Saving rule...' : 'Deploy policy'}
+                {saving ? 'Saving rule...' : 'Add rule'}
               </button>
             </div>
           </form>
         </article>
 
-        <article className="panel policy-liveboard">
+        <article className="panel">
           <div className="panel-heading">
             <div>
-              <span className="section-kicker">Active policies</span>
+              <span className="section-kicker">Active rules</span>
               <h3>Current gateway policy</h3>
             </div>
             <strong>{ruleCountLabel}</strong>
@@ -390,12 +367,7 @@ export function RulesPage() {
                 <article key={rule.id} className="rule-card">
                   <div className="rule-card-head">
                     <div>
-                      <div className="rule-title-row">
-                        <strong>{rule.id}</strong>
-                        <span className={`rule-status-badge${rule.enabled ? ' is-enabled' : ''}`}>
-                          {rule.enabled ? 'Active' : 'Paused'}
-                        </span>
-                      </div>
+                      <strong>{rule.id}</strong>
                       <p>{rule.description ?? 'No description provided.'}</p>
                     </div>
                     <button
@@ -408,11 +380,12 @@ export function RulesPage() {
                     </button>
                   </div>
                   <div className="rule-chip-row">
-                    <span className="rule-chip">{rule.algorithm.replace('_', ' ')}</span>
+                    <span className="rule-chip">{rule.algorithm}</span>
                     <span className="rule-chip">{summariseRule(rule)}</span>
                     <span className="rule-chip">{rule.method ?? 'ALL methods'}</span>
                     <span className="rule-chip">{rule.endpointPattern}</span>
                     <span className="rule-chip">{rule.clientTier ?? 'all tiers'}</span>
+                    <span className="rule-chip">{rule.enabled ? 'enabled' : 'disabled'}</span>
                   </div>
                 </article>
               ))

@@ -66,12 +66,11 @@ export function OverviewPage() {
     <div className="page-stack">
       <section className="page-header">
         <div className="page-copy">
-          <span className="section-kicker">Traffic stories</span>
-          <h2>Read live pressure like an operator, not a spreadsheet.</h2>
+          <span className="section-kicker">Overview</span>
+          <h2>Gateway heartbeat in one glance</h2>
           <p>
-            The overview page keeps the existing five-second poll loop, then reshapes the raw
-            counters into throughput, pressure, latency, and blocked-client signals that are easier
-            to scan during active incidents.
+            The overview page polls the gateway every five seconds, turns counters into readable
+            trends, and keeps the raw Prometheus story visible to the people making traffic calls.
           </p>
         </div>
         <div className="page-actions">
@@ -92,36 +91,36 @@ export function OverviewPage() {
       {error ? <div className="alert-banner">{error}</div> : null}
 
       <section className="summary-grid">
-        <article className="panel stat-card stat-card-observed">
+        <article className="panel stat-card">
           <span className="section-kicker">Observed requests</span>
           <strong>{snapshot ? formatCount(snapshot.totalRequests) : '--'}</strong>
           <p>All tracked gateway requests excluding health, readiness, and metrics endpoints.</p>
         </article>
-        <article className="panel stat-card stat-card-allowed">
+        <article className="panel stat-card">
           <span className="section-kicker">Allowed traffic</span>
           <strong>{snapshot ? formatCount(snapshot.allowedRequests) : '--'}</strong>
           <p>
             Allowed requests stay visible next to blocked traffic so the ratio is never abstract.
           </p>
         </article>
-        <article className="panel stat-card stat-card-blocked">
+        <article className="panel stat-card">
           <span className="section-kicker">Blocked ratio</span>
           <strong>{snapshot ? formatPercent(snapshot.blockedRatio) : '--'}</strong>
           <p>Rate limited or policy-blocked requests as a share of observed gateway traffic.</p>
         </article>
-        <article className="panel stat-card stat-card-throughput">
+        <article className="panel stat-card">
           <span className="section-kicker">Current requests/sec</span>
           <strong>{snapshot ? formatDecimal(snapshot.requestsPerSecond) : '--'}</strong>
           <p>Delta-based throughput derived from consecutive Prometheus polls.</p>
         </article>
       </section>
 
-      <section className="visual-grid visual-grid-primary">
+      <section className="visual-grid">
         <RequestsChart loading={loading} snapshot={deferredSnapshot} />
         <BlockedChart loading={loading} snapshot={deferredSnapshot} />
       </section>
 
-      <section className="visual-grid visual-grid-secondary">
+      <section className="visual-grid">
         <LatencyGraph loading={loading} snapshot={deferredSnapshot} />
         <BlockedClients loading={loading} snapshot={deferredSnapshot} />
       </section>

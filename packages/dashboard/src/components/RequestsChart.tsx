@@ -31,16 +31,16 @@ const chartOptions: ChartOptions<'line'> = {
         display: false,
       },
       ticks: {
-        color: '#6b8c97',
+        color: '#6c5f58',
       },
     },
     y: {
       beginAtZero: true,
       ticks: {
-        color: '#6b8c97',
+        color: '#6c5f58',
       },
       grid: {
-        color: 'rgba(86, 123, 135, 0.22)',
+        color: 'rgba(48, 39, 33, 0.08)',
       },
     },
   },
@@ -65,19 +65,14 @@ export function RequestsChart({ loading, snapshot }: RequestsChartProps) {
         <div className="chart-empty">Waiting for the first metrics poll.</div>
       ) : (
         <div className="chart-frame">
-          <div className="chart-chip-strip" aria-hidden="true">
-            <span>1H</span>
-            <span className="is-active">24H</span>
-            <span>7D</span>
-          </div>
           <Line
             data={{
               labels: series.map((point) => point.label),
               datasets: [
                 {
                   data: series.map((point) => point.value),
-                  borderColor: '#69e6ff',
-                  backgroundColor: 'rgba(105, 230, 255, 0.18)',
+                  borderColor: '#0f766e',
+                  backgroundColor: 'rgba(15, 118, 110, 0.18)',
                   fill: true,
                   borderWidth: 3,
                   pointRadius: 3,
