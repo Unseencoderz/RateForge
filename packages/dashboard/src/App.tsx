@@ -1,10 +1,11 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import { NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 
+import { clearAdminSession } from './api/admin';
 import {
   describeGatewayTarget,
   normaliseGatewayUrl,
-  persistAdminToken,
+  persistAdminPassphrase,
   persistGatewayUrl,
   readInitialDashboardSettings,
   type DashboardSettings,
@@ -13,12 +14,12 @@ import { OverviewPage } from './pages/Overview';
 import { RulesPage } from './pages/Rules';
 
 interface DashboardShellContextValue {
-  draftAdminToken: string;
+  draftAdminPassphrase: string;
   draftGatewayUrl: string;
-  saveAdminToken: () => void;
+  saveAdminPassphrase: () => void;
   saveGatewayUrl: () => void;
   savedMessage: string;
-  setDraftAdminToken: (value: string) => void;
+  setDraftAdminPassphrase: (value: string) => void;
   setDraftGatewayUrl: (value: string) => void;
   settings: DashboardSettings;
 }
@@ -37,7 +38,7 @@ function useDashboardShell(): DashboardShellContextValue {
 function DashboardShell() {
   const [settings, setSettings] = useState<DashboardSettings>(() => readInitialDashboardSettings());
   const [draftGatewayUrl, setDraftGatewayUrl] = useState(settings.gatewayUrl);
-  const [draftAdminToken, setDraftAdminToken] = useState(settings.adminToken);
+  const [draftAdminPassphrase, setDraftAdminPassphrase] = useState(settings.adminPassphrase);
   const [savedMessage, setSavedMessage] = useState('Live polling uses the last saved target.');
 
   const contextValue = useMemo<DashboardShellContextValue>(
@@ -45,11 +46,12 @@ function DashboardShell() {
       settings,
       draftGatewayUrl,
       setDraftGatewayUrl,
-      draftAdminToken,
-      setDraftAdminToken,
+      draftAdminPassphrase,
+      setDraftAdminPassphrase,
       savedMessage,
       saveGatewayUrl: () => {
         const nextGatewayUrl = normaliseGatewayUrl(draftGatewayUrl);
+        clearAdminSession();
         persistGatewayUrl(nextGatewayUrl);
         setSettings((current) => ({
           ...current,
@@ -57,18 +59,22 @@ function DashboardShell() {
         }));
         setSavedMessage(`Gateway target saved: ${describeGatewayTarget(nextGatewayUrl)}`);
       },
-      saveAdminToken: () => {
-        persistAdminToken(draftAdminToken);
+      saveAdminPassphrase: () => {
+        const nextAdminPassphrase = draftAdminPassphrase.trim();
+        clearAdminSession();
+        persistAdminPassphrase(nextAdminPassphrase);
         setSettings((current) => ({
           ...current,
-          adminToken: draftAdminToken.trim(),
+          adminPassphrase: nextAdminPassphrase,
         }));
         setSavedMessage(
-          draftAdminToken.trim() ? 'Admin JWT saved in this browser.' : 'Admin JWT cleared.',
+          nextAdminPassphrase
+            ? 'Admin passphrase saved in this browser.'
+            : 'Admin passphrase cleared.',
         );
       },
     }),
-    [draftAdminToken, draftGatewayUrl, savedMessage, settings],
+    [draftAdminPassphrase, draftGatewayUrl, savedMessage, settings],
   );
 
   return (
@@ -90,7 +96,7 @@ function DashboardShell() {
             </div>
             <div className="status-tile">
               <span className="status-label">Admin access</span>
-              <strong>{settings.adminToken ? 'Configured' : 'Optional until rules work'}</strong>
+              <strong>{settings.adminPassphrase ? 'Configured' : 'Required for rules'}</strong>
             </div>
           </div>
         </header>
@@ -110,17 +116,21 @@ function DashboardShell() {
             Save target
           </button>
           <div className="dock-field">
-            <label htmlFor="admin-token">Admin JWT</label>
+            <label htmlFor="admin-passphrase">Admin passphrase</label>
             <input
-              id="admin-token"
+              id="admin-passphrase"
               type="password"
-              value={draftAdminToken}
-              onChange={(event) => setDraftAdminToken(event.target.value)}
-              placeholder="Paste the token without the Bearer prefix"
+              value={draftAdminPassphrase}
+              onChange={(event) => setDraftAdminPassphrase(event.target.value)}
+              placeholder="Enter the enterprise admin passphrase"
             />
           </div>
-          <button className="button-secondary" type="button" onClick={contextValue.saveAdminToken}>
-            Save token
+          <button
+            className="button-secondary"
+            type="button"
+            onClick={contextValue.saveAdminPassphrase}
+          >
+            Save passphrase
           </button>
           <p className="dock-note">{savedMessage}</p>
         </section>

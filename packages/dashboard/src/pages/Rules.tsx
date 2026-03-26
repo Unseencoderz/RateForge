@@ -85,7 +85,7 @@ export function RulesPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const canManageRules = Boolean(settings.gatewayUrl.trim() && settings.adminToken.trim());
+  const canManageRules = Boolean(settings.gatewayUrl.trim() && settings.adminPassphrase.trim());
   const ruleCountLabel = useMemo(
     () => `${rules.length} active rule${rules.length === 1 ? '' : 's'}`,
     [rules.length],
@@ -94,7 +94,7 @@ export function RulesPage() {
   const loadCurrentRules = async (): Promise<void> => {
     if (!canManageRules) {
       setRules([]);
-      setError('Save both the gateway URL and an admin JWT to manage rules.');
+      setError('Save both the gateway URL and the admin passphrase to manage rules.');
       return;
     }
 
@@ -121,7 +121,7 @@ export function RulesPage() {
     }
 
     void loadCurrentRules();
-  }, [canManageRules, settings.adminToken, settings.gatewayUrl]);
+  }, [canManageRules, settings.adminPassphrase, settings.gatewayUrl]);
 
   const handleFieldChange = (
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -143,7 +143,7 @@ export function RulesPage() {
     event.preventDefault();
 
     if (!canManageRules) {
-      setError('Save both the gateway URL and an admin JWT before posting rules.');
+      setError('Save both the gateway URL and the admin passphrase before posting rules.');
       return;
     }
 
@@ -170,7 +170,7 @@ export function RulesPage() {
 
   const handleDeleteRule = async (ruleId: string): Promise<void> => {
     if (!canManageRules) {
-      setError('Save both the gateway URL and an admin JWT before deleting rules.');
+      setError('Save both the gateway URL and the admin passphrase before deleting rules.');
       return;
     }
 
@@ -360,7 +360,7 @@ export function RulesPage() {
               <div className="chart-empty">
                 {canManageRules
                   ? 'No rules loaded yet. Refresh the gateway or add a first rule.'
-                  : 'Save the gateway URL and admin JWT to load the current ruleset.'}
+                  : 'Save the gateway URL and admin passphrase to load the current ruleset.'}
               </div>
             ) : (
               rules.map((rule) => (

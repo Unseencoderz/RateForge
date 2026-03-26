@@ -1,10 +1,10 @@
 export interface DashboardSettings {
-  adminToken: string;
+  adminPassphrase: string;
   gatewayUrl: string;
 }
 
 export const GATEWAY_URL_STORAGE_KEY = 'rateforge.dashboard.gatewayUrl';
-export const ADMIN_TOKEN_STORAGE_KEY = 'rateforge.dashboard.adminToken';
+export const ADMIN_PASSPHRASE_STORAGE_KEY = 'rateforge.dashboard.adminPassphrase';
 
 export function normaliseGatewayUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
@@ -24,7 +24,7 @@ export function readInitialDashboardSettings(): DashboardSettings {
 
   return {
     gatewayUrl,
-    adminToken: window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY)?.trim() ?? '',
+    adminPassphrase: window.localStorage.getItem(ADMIN_PASSPHRASE_STORAGE_KEY)?.trim() ?? '',
   };
 }
 
@@ -32,8 +32,8 @@ export function persistGatewayUrl(gatewayUrl: string): void {
   window.localStorage.setItem(GATEWAY_URL_STORAGE_KEY, normaliseGatewayUrl(gatewayUrl));
 }
 
-export function persistAdminToken(adminToken: string): void {
-  window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, adminToken.trim());
+export function persistAdminPassphrase(adminPassphrase: string): void {
+  window.localStorage.setItem(ADMIN_PASSPHRASE_STORAGE_KEY, adminPassphrase.trim());
 }
 
 export function describeGatewayTarget(gatewayUrl: string): string {
