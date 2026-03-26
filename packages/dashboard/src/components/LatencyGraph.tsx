@@ -28,7 +28,7 @@ const chartOptions: ChartOptions<'bar'> = {
   scales: {
     x: {
       ticks: {
-        color: '#6c5f58',
+        color: '#6b8c97',
       },
       grid: {
         display: false,
@@ -37,10 +37,10 @@ const chartOptions: ChartOptions<'bar'> = {
     y: {
       beginAtZero: true,
       ticks: {
-        color: '#6c5f58',
+        color: '#6b8c97',
       },
       grid: {
-        color: 'rgba(48, 39, 33, 0.08)',
+        color: 'rgba(86, 123, 135, 0.22)',
       },
     },
   },
@@ -71,7 +71,7 @@ export function LatencyGraph({ loading, snapshot }: LatencyGraphProps) {
               datasets: [
                 {
                   data: [latency.p50, latency.p95, latency.p99],
-                  backgroundColor: ['#1d4b73', '#0f766e', '#c45b35'],
+                  backgroundColor: ['#345f74', '#69e6ff', '#ff8f6e'],
                   borderRadius: 10,
                 },
               ],
