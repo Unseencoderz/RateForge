@@ -10,6 +10,8 @@ import { formatCount, formatDateTime, formatDecimal, formatPercent } from '../li
 
 import type { MetricSnapshot, MetricsSubscriptionHandle } from '../api/metrics';
 
+const statCardClass = 'flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/30 p-6';
+
 export function OverviewPage() {
   const { settings } = useDashboardShellContext();
   const [snapshot, setSnapshot] = useState<MetricSnapshot | null>(null);
@@ -63,65 +65,90 @@ export function OverviewPage() {
   };
 
   return (
-    <div className="page-stack">
-      <section className="page-header">
-        <div className="page-copy">
-          <span className="section-kicker">Traffic stories</span>
-          <h2>Read live pressure like an operator, not a spreadsheet.</h2>
-          <p>
-            The overview page keeps the existing five-second poll loop, then reshapes the raw
-            counters into throughput, pressure, latency, and blocked-client signals that are easier
-            to scan during active incidents.
+    <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-cyan-300">
+            Traffic stories
+          </p>
+          <h2 className="text-2xl font-semibold tracking-tight text-zinc-100 sm:text-3xl">
+            Live gateway behavior, organized for operators.
+          </h2>
+          <p className="max-w-3xl text-sm leading-6 text-zinc-400">
+            The overview keeps the same five-second polling loop and turns raw counters into
+            throughput, blocked ratio, latency, and client-pressure signals that are easier to read
+            under load.
           </p>
         </div>
-        <div className="page-actions">
+        <div className="flex flex-col items-start gap-3">
           <button
-            className="button-primary"
+            className="inline-flex items-center justify-center rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-wait disabled:opacity-60"
             type="button"
             onClick={() => void refreshNow()}
             disabled={refreshing}
           >
             {refreshing ? 'Refreshing...' : 'Refresh now'}
           </button>
-          <p className="subtle-label">
+          <p className="text-sm text-zinc-500">
             Last snapshot: {formatDateTime(snapshot?.fetchedAt ?? null)}
           </p>
         </div>
       </section>
 
-      {error ? <div className="alert-banner">{error}</div> : null}
+      {error ? (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      ) : null}
 
-      <section className="summary-grid">
-        <article className="panel stat-card stat-card-observed">
-          <span className="section-kicker">Observed requests</span>
-          <strong>{snapshot ? formatCount(snapshot.totalRequests) : '--'}</strong>
-          <p>All tracked gateway requests excluding health, readiness, and metrics endpoints.</p>
-        </article>
-        <article className="panel stat-card stat-card-allowed">
-          <span className="section-kicker">Allowed traffic</span>
-          <strong>{snapshot ? formatCount(snapshot.allowedRequests) : '--'}</strong>
-          <p>
-            Allowed requests stay visible next to blocked traffic so the ratio is never abstract.
+      <section className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+        <article className={statCardClass}>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">Observed requests</p>
+          <strong className="font-mono text-[2rem] leading-none tracking-tight text-zinc-100">
+            {snapshot ? formatCount(snapshot.totalRequests) : '--'}
+          </strong>
+          <p className="text-sm leading-6 text-zinc-400">
+            All tracked gateway requests excluding health, readiness, and metrics endpoints.
           </p>
         </article>
-        <article className="panel stat-card stat-card-blocked">
-          <span className="section-kicker">Blocked ratio</span>
-          <strong>{snapshot ? formatPercent(snapshot.blockedRatio) : '--'}</strong>
-          <p>Rate limited or policy-blocked requests as a share of observed gateway traffic.</p>
+        <article className={statCardClass}>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">Allowed traffic</p>
+          <strong className="font-mono text-[2rem] leading-none tracking-tight text-zinc-100">
+            {snapshot ? formatCount(snapshot.allowedRequests) : '--'}
+          </strong>
+          <p className="text-sm leading-6 text-zinc-400">
+            Successful traffic stays visible beside blocked requests so the ratio is always
+            grounded.
+          </p>
         </article>
-        <article className="panel stat-card stat-card-throughput">
-          <span className="section-kicker">Current requests/sec</span>
-          <strong>{snapshot ? formatDecimal(snapshot.requestsPerSecond) : '--'}</strong>
-          <p>Delta-based throughput derived from consecutive Prometheus polls.</p>
+        <article className={statCardClass}>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">Blocked ratio</p>
+          <strong className="font-mono text-[2rem] leading-none tracking-tight text-zinc-100">
+            {snapshot ? formatPercent(snapshot.blockedRatio) : '--'}
+          </strong>
+          <p className="text-sm leading-6 text-zinc-400">
+            Rate-limited or policy-blocked requests as a share of observed gateway traffic.
+          </p>
+        </article>
+        <article className={statCardClass}>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
+            Current requests/sec
+          </p>
+          <strong className="font-mono text-[2rem] leading-none tracking-tight text-zinc-100">
+            {snapshot ? formatDecimal(snapshot.requestsPerSecond) : '--'}
+          </strong>
+          <p className="text-sm leading-6 text-zinc-400">
+            Delta-based throughput derived from consecutive Prometheus polls.
+          </p>
         </article>
       </section>
 
-      <section className="visual-grid visual-grid-primary">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)]">
         <RequestsChart loading={loading} snapshot={deferredSnapshot} />
         <BlockedChart loading={loading} snapshot={deferredSnapshot} />
       </section>
 
-      <section className="visual-grid visual-grid-secondary">
+      <section className="grid gap-4 xl:grid-cols-2">
         <LatencyGraph loading={loading} snapshot={deferredSnapshot} />
         <BlockedClients loading={loading} snapshot={deferredSnapshot} />
       </section>

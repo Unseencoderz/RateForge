@@ -40,6 +40,12 @@ module.exports = {
   },
   overrides: [
     {
+      files: ['packages/dashboard/**/*.ts', 'packages/dashboard/**/*.tsx'],
+      rules: {
+        'import/no-unresolved': 'off',
+      },
+    },
+    {
       files: ['load-tests/**/*.js'],
       globals: {
         __ENV: 'readonly',
