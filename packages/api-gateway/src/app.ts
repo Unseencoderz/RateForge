@@ -1,9 +1,15 @@
-import { DOWNSTREAM_TARGET_URL, FRONTEND_URL } from '@rateforge/config';
-import { HTTP_STATUS_OK } from '@rateforge/types';
+import {
+  ADMIN_PASSPHRASE,
+  DOWNSTREAM_TARGET_URL,
+  FRONTEND_URL,
+  JWT_SECRET,
+} from '@rateforge/config';
+import { HTTP_STATUS_OK, HTTP_STATUS_UNAUTHORIZED } from '@rateforge/types';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
+import jwt from 'jsonwebtoken';
 
 import { loadRules } from './config/rules-loader';
 import { seedRulesStore } from './config/rules-store';
@@ -22,6 +28,10 @@ import { bindRequestContext } from './utils/request-context';
 
 import type { ApiResponse, RateLimitRequest, RateLimitResult } from '@rateforge/types';
 import type { Express, NextFunction, Request, Response } from 'express';
+
+interface AdminLoginRequestBody {
+  passphrase?: unknown;
+}
 
 export const app: Express = express();
 app.set('trust proxy', true);
@@ -96,6 +106,40 @@ app.get('/ready', async (_req: Request, res: Response): Promise<void> => {
 });
 
 // ── API v1 router ─────────────────────────────────────────────────────────────
+app.post('/api/v1/admin/login', (req: Request, res: Response) => {
+  const { passphrase } = req.body as AdminLoginRequestBody;
+
+  if (typeof passphrase !== 'string' || passphrase !== ADMIN_PASSPHRASE) {
+    const body: ApiResponse<never> = {
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Invalid admin passphrase.',
+      },
+    };
+
+    res.status(HTTP_STATUS_UNAUTHORIZED).json(body);
+    return;
+  }
+
+  const token = jwt.sign(
+    {
+      userId: 'admin',
+      role: 'admin',
+      isAdmin: true,
+    },
+    JWT_SECRET,
+    { expiresIn: '7d' },
+  );
+
+  const body: ApiResponse<{ token: string }> = {
+    success: true,
+    data: { token },
+  };
+
+  res.status(HTTP_STATUS_OK).json(body);
+});
+
 app.post('/api/v1/check', verifyToken, (req: Request, res: Response, next: NextFunction): void => {
   void (async () => {
     const result = await checkLimitWithLimiter(req.body as RateLimitRequest);

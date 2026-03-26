@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals';
 import { AlgorithmType } from '@rateforge/types';
+import jwt from 'jsonwebtoken';
 import request from 'supertest';
 
 import type { RateLimitRequest, RateLimitResult } from '@rateforge/types';
@@ -19,6 +20,7 @@ const createProxyMiddlewareMock = jest.fn(() => proxyMiddlewareMock as any);
 jest.mock('@rateforge/config', () => ({
   FRONTEND_URL: 'http://localhost:4000',
   DOWNSTREAM_TARGET_URL: 'http://localhost:8080',
+  ADMIN_PASSPHRASE: 'enterprise-passphrase',
   REDIS_URL: 'redis://localhost:6379',
   RATE_LIMITER_URL: 'http://localhost:3001',
   JWT_SECRET: 'test-secret',
@@ -185,6 +187,45 @@ describe('gateway app routing', () => {
     const res = await request(app).post('/api/v1/check').send(SDK_CHECK_REQUEST);
 
     expect(res.status).toBe(401);
+    expect(checkLimitMock).not.toHaveBeenCalled();
+    expect(proxyMiddlewareMock).not.toHaveBeenCalled();
+  });
+
+  it('issues an admin JWT from POST /api/v1/admin/login without requiring bearer auth', async () => {
+    const res = await request(app)
+      .post('/api/v1/admin/login')
+      .send({ passphrase: 'enterprise-passphrase' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(typeof res.body.data?.token).toBe('string');
+
+    const payload = jwt.verify(res.body.data.token, 'test-secret') as {
+      userId: string;
+      role: string;
+      isAdmin: boolean;
+    };
+
+    expect(payload).toMatchObject({
+      userId: 'admin',
+      role: 'admin',
+      isAdmin: true,
+    });
+    expect(checkLimitMock).not.toHaveBeenCalled();
+    expect(proxyMiddlewareMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects POST /api/v1/admin/login when the passphrase is wrong', async () => {
+    const res = await request(app).post('/api/v1/admin/login').send({ passphrase: 'wrong' });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Invalid admin passphrase.',
+      },
+    });
     expect(checkLimitMock).not.toHaveBeenCalled();
     expect(proxyMiddlewareMock).not.toHaveBeenCalled();
   });

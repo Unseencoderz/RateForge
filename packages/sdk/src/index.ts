@@ -12,7 +12,7 @@
  *
  * const client = new RateForgeClient({
  *   baseUrl: 'http://localhost:3000',
- *   apiKey: 'my-jwt-or-api-key',
+ *   passphrase: 'my-enterprise-passphrase',
  * });
  *
  * const result = await client.checkLimit(req);
@@ -39,10 +39,15 @@ export interface RateForgeClientOptions {
   baseUrl: string;
 
   /**
-   * JWT or API key that is forwarded as the `Authorization: Bearer <apiKey>`
-   * header on every request.
+   * Enterprise admin passphrase used to exchange for a short-lived gateway JWT.
    */
-  apiKey: string;
+  passphrase?: string;
+
+  /**
+   * Legacy JWT/API key fallback. When `passphrase` is omitted, this token is
+   * forwarded as `Authorization: Bearer <apiKey>`.
+   */
+  apiKey?: string;
 
   /**
    * Per-request timeout in milliseconds. Defaults to 5000.
@@ -57,6 +62,10 @@ export interface SdkError {
   status?: number;
   /** Structured error body returned by the gateway, if available. */
   body?: ApiResponse<never>;
+}
+
+interface LoginResponse {
+  token: string;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -111,6 +120,40 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return body.data as T;
 }
 
+function decodeBase64Url(value: string): string | null {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+
+  try {
+    return globalThis.atob(padded);
+  } catch {
+    return null;
+  }
+}
+
+function isJwtExpired(token: string): boolean {
+  const payloadSegment = token.split('.')[1];
+  if (!payloadSegment) {
+    return false;
+  }
+
+  const decoded = decodeBase64Url(payloadSegment);
+  if (!decoded) {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(decoded) as { exp?: number };
+    if (typeof payload.exp !== 'number') {
+      return false;
+    }
+
+    return payload.exp * 1_000 <= Date.now() + 30_000;
+  } catch {
+    return false;
+  }
+}
+
 // ── RateForgeClient ───────────────────────────────────────────────────────────
 
 /**
@@ -121,59 +164,139 @@ async function parseResponse<T>(response: Response): Promise<T> {
  *
  * Design constraints (from DevPlan):
  * - Never imports Express, Redis, or any server-side runtime.
- * - All state is held in the constructor options — instances are stateless
- *   between calls and are safe to share across async contexts.
+ * - Passphrase mode caches a gateway-issued JWT between calls.
+ * - Concurrent callers share a single in-flight authentication exchange.
  * - Error handling: throws a typed `SdkError` object on HTTP or network
  *   failures so callers can discriminate on `.status` or `.body.error.code`.
  */
 export class RateForgeClient {
   private readonly baseUrl: string;
-  private readonly apiKey: string;
+  private readonly passphrase?: string;
+  private readonly apiKey?: string;
   private readonly timeoutMs: number;
+  private token?: string;
+  private authenticationPromise: Promise<string> | null = null;
 
   constructor(options: RateForgeClientOptions) {
     if (!options.baseUrl) {
       throw new Error('[RateForgeClient] baseUrl is required.');
     }
-    if (!options.apiKey) {
-      throw new Error('[RateForgeClient] apiKey is required.');
+    if (!options.passphrase && !options.apiKey) {
+      throw new Error('[RateForgeClient] passphrase or apiKey is required.');
     }
 
     // Strip trailing slash so URL concatenation is always consistent.
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
-    this.apiKey = options.apiKey;
+    this.passphrase = options.passphrase?.trim() || undefined;
+    this.apiKey = options.apiKey?.trim() || undefined;
     this.timeoutMs = options.timeoutMs ?? 5_000;
   }
 
   // ── Private transport ─────────────────────────────────────────────────────
 
-  private headers(): Record<string, string> {
+  private headers(token: string): Record<string, string> {
     return {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${token}`,
     };
   }
 
-  private async get<T>(path: string): Promise<T> {
-    const response = await fetchWithTimeout(
-      `${this.baseUrl}${path}`,
-      { method: 'GET', headers: this.headers() },
-      this.timeoutMs,
-    );
-    return parseResponse<T>(response);
+  private async authenticate(): Promise<string> {
+    if (!this.passphrase) {
+      if (!this.apiKey) {
+        throw new Error('[RateForgeClient] passphrase or apiKey is required.');
+      }
+
+      return this.apiKey;
+    }
+
+    if (this.token && !isJwtExpired(this.token)) {
+      return this.token;
+    }
+
+    if (this.authenticationPromise) {
+      return this.authenticationPromise;
+    }
+
+    this.authenticationPromise = (async () => {
+      const response = await fetchWithTimeout(
+        `${this.baseUrl}/api/v1/admin/login`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ passphrase: this.passphrase }),
+        },
+        this.timeoutMs,
+      );
+      const data = await parseResponse<LoginResponse>(response);
+
+      if (!data?.token || typeof data.token !== 'string') {
+        const err: SdkError = {
+          message: 'Gateway login did not return a token.',
+          status: response.status,
+        };
+        throw err;
+      }
+
+      this.token = data.token;
+      return data.token;
+    })();
+
+    try {
+      return await this.authenticationPromise;
+    } finally {
+      this.authenticationPromise = null;
+    }
   }
 
-  private async post<T>(path: string, body?: unknown): Promise<T> {
+  private async ensureToken(): Promise<string> {
+    if (this.passphrase) {
+      if (!this.token || isJwtExpired(this.token)) {
+        return this.authenticate();
+      }
+
+      return this.token;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('[RateForgeClient] passphrase or apiKey is required.');
+    }
+
+    return this.apiKey;
+  }
+
+  private async request<T>(
+    method: 'GET' | 'POST',
+    path: string,
+    body?: unknown,
+    allowReauth: boolean = true,
+  ): Promise<T> {
+    const token = await this.ensureToken();
     const response = await fetchWithTimeout(
       `${this.baseUrl}${path}`,
       {
-        method: 'POST',
-        headers: this.headers(),
+        method,
+        headers: this.headers(token),
         body: body !== undefined ? JSON.stringify(body) : undefined,
       },
       this.timeoutMs,
     );
+
+    if (response.status === 401 && allowReauth && this.passphrase) {
+      this.token = undefined;
+      await this.authenticate();
+      return this.request<T>(method, path, body, false);
+    }
+
     return parseResponse<T>(response);
+  }
+
+  private async get<T>(path: string): Promise<T> {
+    return this.request<T>('GET', path);
+  }
+
+  private async post<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>('POST', path, body);
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
